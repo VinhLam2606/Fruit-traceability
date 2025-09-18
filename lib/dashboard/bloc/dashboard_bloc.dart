@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:untitled/dashboard/model/product.dart';
 import 'package:web3dart/web3dart.dart';
-import 'package:web_socket_channel/io.dart';
 
 part 'dashboard_event.dart';
 part 'dashboard_state.dart';
@@ -23,9 +22,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   late DeployedContract _deployedContract;
   late EthPrivateKey _credentials;
 
-  // Hàm contract cho việc thêm và lấy sản phẩm
   late ContractFunction _addProductFunction;
-  // Sửa lại: Dùng một hàm duy nhất để lấy tất cả sản phẩm
   late ContractFunction _getAllProductsFunction;
 
   FutureOr<void> _dashboardInitialFetchEvent(
@@ -34,41 +31,40 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   ) async {
     emit(DashboardLoadingState());
     try {
+      // RPC cho Android Emulator (10.0.2.2) hoặc 127.0.0.1 nếu chạy trực tiếp
       const String rpcUrl = "http://10.0.2.2:7545";
-      const String socketUrl = "ws://10.0.2.2:7545/";
       const String privateKey =
-          "0x9a547e9e81307824733818ef20b1ff42f49920134bb43fe8b98a3fbe3e170967";
+          "0x641461d541be24b36b695139db922915c1849c6f178e0e771bbd95dce037c3eb";
 
-      _web3client = Web3Client(
-        rpcUrl,
-        http.Client(),
-        socketConnector: () {
-          return IOWebSocketChannel.connect(socketUrl).cast<String>();
-        },
-      );
+      _web3client = Web3Client(rpcUrl, http.Client());
 
       final String abiString = await rootBundle.loadString(
-        "build/contracts/Chain.json", // Giả định ABI của bạn chứa contract 'Products'
+        "build/contracts/Chain.json",
       );
       final jsonAbi = jsonDecode(abiString);
-      // Chú ý: Tên contract trong ABI phải khớp, ví dụ 'Products'
-      final abi = ContractAbi.fromJson(jsonEncode(jsonAbi['abi']), 'Products');
 
+      final abi = ContractAbi.fromJson(jsonEncode(jsonAbi['abi']), 'Chain');
+
+      // Lấy networkId động (1337 hoặc 5777 tuỳ Ganache)
+      final networks = jsonAbi['networks'] as Map<String, dynamic>;
+      if (networks.isEmpty) {
+        throw Exception(
+          "No deployed network found in ABI. Did you run migrate?",
+        );
+      }
+      final networkKey = networks.keys.first;
       final contractAddress = EthereumAddress.fromHex(
-        jsonAbi['networks']['1337']['address'],
+        networks[networkKey]['address'],
       );
 
       _credentials = EthPrivateKey.fromHex(privateKey);
       _deployedContract = DeployedContract(abi, contractAddress);
 
-      // Khởi tạo các hàm từ contract
       _addProductFunction = _deployedContract.function('addAProduct');
-      // Sửa lại tên hàm ở đây
       _getAllProductsFunction = _deployedContract.function('getAllProducts');
 
       emit(DashboardInitialSuccessState());
     } catch (e) {
-      // Thêm thông tin chi tiết vào lỗi để dễ debug
       emit(DashboardErrorState("Initialization failed: ${e.toString()}"));
     }
   }
@@ -77,7 +73,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     CreateProductButtonPressedEvent event,
     Emitter<DashboardState> emit,
   ) async {
-    // ... (Phần này không thay đổi)
     emit(DashboardLoadingState());
     try {
       final result = await _web3client.sendTransaction(
@@ -92,41 +87,33 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
             BigInt.from(event.expiryDate),
           ],
         ),
-        chainId: 1337,
+        chainId: 1337, // đổi thành 5777 nếu Ganache GUI
       );
 
       emit(
         DashboardSuccessState("Product created successfully! TxHash: $result"),
       );
     } catch (e) {
-      emit(DashboardErrorState(e.toString()));
+      emit(DashboardErrorState("Failed to create product: ${e.toString()}"));
     }
   }
 
-  // Phương thức mới để xử lý việc tải danh sách sản phẩm
   FutureOr<void> _fetchProductsEvent(
     FetchProductsEvent event,
     Emitter<DashboardState> emit,
   ) async {
     emit(DashboardLoadingState());
     try {
-      // 1. Gọi hàm getAllProducts từ contract
       final result = await _web3client.call(
         contract: _deployedContract,
         function: _getAllProductsFunction,
         params: [],
       );
 
-      // web3dart trả về kết quả trong một mảng, nên ta lấy phần tử đầu tiên
       final List<dynamic> productListFromContract = result[0];
-
-      final List<Product> products = [];
-
-      // 2. Lặp qua danh sách trả về và chuyển đổi thành đối tượng Product
-      for (final productData in productListFromContract) {
-        // Mỗi productData là một mảng các thuộc tính của struct Product
-        products.add(Product.fromContract(productData as List<dynamic>));
-      }
+      final List<Product> products = productListFromContract
+          .map((p) => Product.fromContract(p as List<dynamic>))
+          .toList();
 
       emit(ProductsLoadedState(products));
     } catch (e) {

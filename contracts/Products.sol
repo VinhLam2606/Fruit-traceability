@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.21;
+pragma solidity >=0.4.22 <0.9.0;
 
 import "./Types.sol";
 import "./Users.sol";
@@ -20,8 +20,6 @@ contract Products is Users {
     event ProductAdded(string batchId, string name, string orgName, address creator, uint256 time);
     event ProductTransferred(string batchId, address from, address to, uint256 time);
     event ProductInfoUpdated(string batchId, string desc, address updater, uint256 time);
-
-    // --- ERRORS ---
     error NotRegistered();
     error NotManufacturer();
     error NotInOrg();
