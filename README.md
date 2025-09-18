@@ -1,5 +1,4 @@
-<<<<<<< HEAD
-# untitled
+
 
 A new Flutter project.
 
@@ -15,7 +14,6 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
-=======
+
 # Fruit-traceability
 Flutter application for checking Origin Fruit Products by using Blockchain
->>>>>>> 7739d47a6f10f63469dd23e9f7cf1a995521e9c2
