@@ -34,7 +34,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       // RPC cho Android Emulator (10.0.2.2) hoặc 127.0.0.1 nếu chạy trực tiếp
       const String rpcUrl = "http://10.0.2.2:7545";
       const String privateKey =
-          "0x641461d541be24b36b695139db922915c1849c6f178e0e771bbd95dce037c3eb";
+          "0x298fcb664139fbfff9370c360c8cdc2058b118ee1c134ad94fbf38025419b2b2";
 
       _web3client = Web3Client(rpcUrl, http.Client());
 
