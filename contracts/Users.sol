@@ -9,7 +9,6 @@ contract Users {
     mapping(string => address) internal organizationNameToOwner;
     address[] internal organizationAddresses;
 
-    // Link a member's address to their organization's owner address for easy lookup
     mapping(address => address) internal memberToOrganizationOwner;
 
     event UserAdded(address indexed userAddr, string name, Types.UserRole role, uint256 date);
@@ -81,38 +80,25 @@ contract Users {
         emit AssociateAdded(msg.sender, msg.sender, users[msg.sender].userName);
     }
 
-    // --- FUNCTION HAS BEEN REPLACED FOR BETTER SECURITY ---
-    /**
-     * @notice Allows an organization owner to add a new associate to THEIR OWN organization.
-     * @dev The organization is implicitly identified by msg.sender. The orgAddr parameter is removed.
-     * @param userAddr The address of the new user to be added.
-     */
     function addAssociateToOrganization(address userAddr) public onlyRegisteredUser {
-        // The organization's address is determined by the caller's address (the owner)
         address orgAddr = msg.sender;
 
-        // 1. Check if the caller actually owns an organization.
         require(organizations[orgAddr].ownerAddress == msg.sender, "Caller does not own an organization");
-
-        // 2. Validate the user being added.
         require(userAddr != address(0), "Invalid user address");
         require(users[userAddr].userID != address(0), "User must be registered before adding to organization");
         require(!users[userAddr].isAlreadyInAnyOrganization, "User is already in another organization");
 
         Types.Organization storage org = organizations[orgAddr];
 
-        // 3. Check for duplicate members.
         for (uint i = 0; i < org.organizationMembers.length; i++) {
             if (org.organizationMembers[i].userID == userAddr) {
                 revert("User is already a member of this organization");
             }
         }
 
-        // 4. Add the new member.
         users[userAddr].isAlreadyInAnyOrganization = true;
         org.organizationMembers.push(users[userAddr]);
 
-        // Map the new member's address to the organization's owner address
         memberToOrganizationOwner[userAddr] = orgAddr;
 
         emit AssociateAdded(orgAddr, userAddr, users[userAddr].userName);
@@ -130,6 +116,11 @@ contract Users {
 
     function isRegistered(address account) public view returns (bool) {
         return users[account].userID != address(0);
+    }
+
+    // ✅ New helper
+    function isOrganizationExists(string memory name_) public view returns (bool) {
+        return organizationNameToOwner[name_] != address(0);
     }
 
     function getOrganizationAddresses() public view returns (address[] memory) {
