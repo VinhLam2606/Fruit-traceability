@@ -1,26 +1,22 @@
+// dashboard/bloc/organization_bloc.dart
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:untitled/dashboard/model/organization.dart';
-import 'package:untitled/dashboard/model/product.dart';
 import 'package:web3dart/web3dart.dart';
 
 part 'organization_event.dart';
 part 'organization_state.dart';
 
 class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
-  // Các biến này giờ đây sẽ được truyền từ bên ngoài vào
   final Web3Client _web3client;
   final DeployedContract _deployedContract;
   final EthPrivateKey _credentials;
 
-  // Khai báo các hàm contract
   late ContractFunction _getOrganizationFunction;
-  late ContractFunction _getProductsByOrgFunction;
   late ContractFunction _addAssociateFunction;
   late ContractFunction _removeAssociateFunction;
 
-  // Cập nhật constructor để nhận các đối tượng Web3
   OrganizationBloc({
     required Web3Client web3client,
     required DeployedContract deployedContract,
@@ -29,10 +25,7 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
        _deployedContract = deployedContract,
        _credentials = credentials,
        super(OrganizationInitial()) {
-    // Khởi tạo các hàm contract ngay tại đây
     _getOrganizationFunction = _deployedContract.function('getOrganization');
-    // Lưu ý: getProductsByOrg có thể không tồn tại trong Users.sol, hãy đảm bảo contract ABI của bạn có hàm này
-    _getProductsByOrgFunction = _deployedContract.function('getProductsByOrg');
     _addAssociateFunction = _deployedContract.function(
       'addAssociateToOrganization',
     );
@@ -40,13 +33,10 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
       'removeAssociateFromOrganization',
     );
 
-    // Đăng ký các event handlers
     on<FetchOrganizationDetails>(_onFetchOrganizationDetails);
     on<AddMemberToOrganization>(_onAddMember);
     on<RemoveMemberFromOrganization>(_onRemoveMember);
   }
-
-  // Bỏ hoàn toàn hàm _initWeb3() cũ đi
 
   Future<void> _onFetchOrganizationDetails(
     FetchOrganizationDetails event,
@@ -61,29 +51,23 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
         params: [ownerAddress],
       );
 
-      // Kiểm tra nếu tổ chức không tồn tại
-      if ((orgData.first as String).isEmpty) {
-        emit(OrganizationError("Tổ chức không tồn tại cho địa chỉ của bạn."));
+      // FIX: Access the inner list (orgData[0]) because web3dart can wrap single struct returns in an extra list.
+      // The first element of the inner list (orgData[0][0]) is the organization name (a String).
+      if ((orgData[0][0] as String).isEmpty) {
+        // TRANSLATION: Changed the error message to English.
+        emit(
+          OrganizationError("Organization does not exist for your address."),
+        );
         return;
       }
 
-      final organization = Organization.fromContract(orgData);
+      // FIX: Pass the inner list (orgData[0]) to the factory method.
+      final organization = Organization.fromContract(orgData[0]);
 
-      // Giả sử hàm getProductsByOrgFunction tồn tại để lấy sản phẩm
-      // Nếu không, bạn có thể bỏ qua phần này
-      final productsData = await _web3client.call(
-        contract: _deployedContract,
-        function: _getProductsByOrgFunction,
-        params: [organization.organizationName],
-      );
-
-      final List<Product> products = (productsData.first as List<dynamic>)
-          .map((p) => Product.fromContract(p as List<dynamic>))
-          .toList();
-
-      emit(OrganizationLoaded(organization, products));
+      emit(OrganizationLoaded(organization));
     } catch (e) {
-      emit(OrganizationError("Lỗi tải dữ liệu: ${e.toString()}"));
+      // TRANSLATION: Changed the error message to English.
+      emit(OrganizationError("Error loading data: ${e.toString()}"));
     }
   }
 
@@ -100,16 +84,15 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
         Transaction.callContract(
           contract: _deployedContract,
           function: _addAssociateFunction,
-          parameters: [
-            ownerAddress,
-            memberEthAddress,
-          ], // addAssociate cần 2 tham số: orgAddr, userAddr
+          parameters: [ownerAddress, memberEthAddress],
         ),
         chainId: 1337,
       );
-      emit(OrganizationActionSuccess("Thêm thành viên thành công!"));
+      // TRANSLATION: Changed the success message to English.
+      emit(OrganizationActionSuccess("Member added successfully!"));
     } catch (e) {
-      emit(OrganizationError("Thêm thành viên thất bại: ${e.toString()}"));
+      // TRANSLATION: Changed the error message to English.
+      emit(OrganizationError("Failed to add member: ${e.toString()}"));
     }
   }
 
@@ -125,15 +108,15 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
         Transaction.callContract(
           contract: _deployedContract,
           function: _removeAssociateFunction,
-          parameters: [
-            memberEthAddress,
-          ], // removeAssociate chỉ cần 1 tham số: userAddr
+          parameters: [memberEthAddress],
         ),
         chainId: 1337,
       );
-      emit(OrganizationActionSuccess("Xóa thành viên thành công!"));
+      // TRANSLATION: Changed the success message to English.
+      emit(OrganizationActionSuccess("Member removed successfully!"));
     } catch (e) {
-      emit(OrganizationError("Xóa thành viên thất bại: ${e.toString()}"));
+      // TRANSLATION: Changed the error message to English.
+      emit(OrganizationError("Failed to remove member: ${e.toString()}"));
     }
   }
 }

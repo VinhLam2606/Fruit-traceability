@@ -4,7 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
 import 'package:untitled/dashboard/model/product.dart';
-import 'package:untitled/dashboard/ui/organization_management_page.dart'; // MỚI: Import trang quản lý
+// Import for OrganizationManagementPage is no longer needed unless used elsewhere.
+// import 'package:untitled/dashboard/ui/organization_management_page.dart';
 
 class CreateProductPage extends StatelessWidget {
   const CreateProductPage({super.key});
@@ -30,7 +31,7 @@ class _CreateProductViewState extends State<CreateProductView> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController dateController = TextEditingController();
 
-  // Helper để chuyển timestamp sang định dạng đọc được
+  // Helper to format the timestamp for display
   String _formatTimestamp(BigInt timestamp) {
     if (timestamp == BigInt.zero) return "N/A";
     final dateTime = DateTime.fromMillisecondsSinceEpoch(
@@ -44,21 +45,7 @@ class _CreateProductViewState extends State<CreateProductView> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Product Dashboard'),
-        // MỚI: Thêm actions vào AppBar
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.group),
-            tooltip: 'Manage Organization',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const OrganizationManagementPage(),
-                ),
-              );
-            },
-          ),
-        ],
+        // The 'actions' property has been removed from here.
       ),
       body: BlocConsumer<DashboardBloc, DashboardState>(
         listenWhen: (previous, current) => current is! ProductsLoadedState,
@@ -104,7 +91,7 @@ class _CreateProductViewState extends State<CreateProductView> {
     );
   }
 
-  // Widget cho form tạo sản phẩm
+  // Widget for the product creation form
   Widget _buildCreateProductForm(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -147,7 +134,7 @@ class _CreateProductViewState extends State<CreateProductView> {
     );
   }
 
-  // Widget cho danh sách sản phẩm
+  // Widget for the product list
   Widget _buildProductList(BuildContext context, DashboardState state) {
     return Expanded(
       child: Column(

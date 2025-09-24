@@ -1,8 +1,7 @@
+// dashboard/bloc/organization_state.dart
 part of 'organization_bloc.dart';
 
-// KHÔNG CÓ IMPORT Ở ĐÂY
-
-sealed class OrganizationState {}
+abstract class OrganizationState {}
 
 class OrganizationInitial extends OrganizationState {}
 
@@ -10,8 +9,10 @@ class OrganizationLoading extends OrganizationState {}
 
 class OrganizationLoaded extends OrganizationState {
   final Organization organization;
-  final List<Product> products;
-  OrganizationLoaded(this.organization, this.products);
+  // THAY ĐỔI: Xóa bỏ danh sách sản phẩm
+  // final List<Product> products;
+
+  OrganizationLoaded(this.organization);
 }
 
 class OrganizationActionSuccess extends OrganizationState {
