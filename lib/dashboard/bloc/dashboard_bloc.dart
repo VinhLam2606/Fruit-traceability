@@ -13,6 +13,7 @@ part 'dashboard_event.dart';
 part 'dashboard_state.dart';
 
 class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
+  // ... (Constructor và khai báo biến không đổi) ...
   DashboardBloc() : super(DashboardInitial()) {
     developer.log("DEBUG DashboardBloc created");
 
@@ -34,6 +35,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   late ContractFunction _isRegisteredFunction;
   late ContractFunction _isOrganizationExistsFunction;
 
+  // ... (Hàm _dashboardInitialFetchEvent và _ensureUserAndOrgRegistered không đổi) ...
   FutureOr<void> _dashboardInitialFetchEvent(
     DashboardInitialFetchEvent event,
     Emitter<DashboardState> emit,
@@ -43,7 +45,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       const String rpcUrl = "http://10.0.2.2:7545";
       const String privateKey =
           // Thay bằng private key mới của bạn khi test
-          "0x47dc79f0adfd1ac50bbdedb9b0ba2bcf3146453972aba05fca84c26def5c0a20";
+          "0x34e80e9b48d31a6e719ee02af8a4e8ebcf7d8fbb4404fa304c67b9c5943d7a08";
 
       _web3client = Web3Client(rpcUrl, http.Client());
 
@@ -83,13 +85,16 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         "DEBUG Dashboard initialized with contract at $contractAddress",
       );
 
+      // Đảm bảo user và tổ chức tồn tại một lần duy nhất
+      final orgName = "Org_${(await _credentials.extractAddress()).hex}";
+      await _ensureUserAndOrgRegistered(orgName);
+
       emit(DashboardInitialSuccessState());
     } catch (e) {
       emit(DashboardErrorState("Initialization failed: ${e.toString()}"));
     }
   }
 
-  /// Đảm bảo user đã đăng ký và có tổ chức (tự tạo mới nếu chưa có).
   Future<void> _ensureUserAndOrgRegistered(String orgName) async {
     final address = await _credentials.extractAddress();
 
@@ -154,11 +159,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     emit(DashboardLoadingState());
     try {
       developer.log("DEBUG creating product: ${event.name}");
-
-      // đảm bảo user + org tồn tại
-      final orgName = "Org_${(await _credentials.extractAddress()).hex}";
-      await _ensureUserAndOrgRegistered(orgName);
-
       developer.log("DEBUG calling addAProduct...");
 
       final txHash = await _web3client.sendTransaction(
@@ -166,11 +166,11 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         Transaction.callContract(
           contract: _deployedContract,
           function: _addProductFunction,
+          // THAY ĐỔI: Cập nhật tham số truyền vào contract
           parameters: [
             event.batchId,
             event.name,
-            BigInt.from(event.harvestDate),
-            BigInt.from(event.expiryDate),
+            BigInt.from(event.date), // Chỉ truyền một tham số date
           ],
         ),
         chainId: 1337,
@@ -184,6 +184,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     }
   }
 
+  // ... (Hàm _registerOrgAndCreateProductEvent tương tự, cần cập nhật parameters) ...
   FutureOr<void> _registerOrgAndCreateProductEvent(
     RegisterOrgAndCreateProductEvent event,
     Emitter<DashboardState> emit,
@@ -192,19 +193,28 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     try {
       developer.log("DEBUG registering org: ${event.orgName}");
 
-      await _ensureUserAndOrgRegistered(event.orgName);
+      // Tách biệt việc đăng ký tổ chức.
+      await _web3client.sendTransaction(
+        _credentials,
+        Transaction.callContract(
+          contract: _deployedContract,
+          function: _addOrganizationFunction,
+          parameters: [
+            event.orgName,
+            BigInt.from(DateTime.now().millisecondsSinceEpoch ~/ 1000),
+          ],
+        ),
+        chainId: 1337,
+      );
+
+      developer.log("DEBUG Organization registered. Now creating product...");
 
       final txHash = await _web3client.sendTransaction(
         _credentials,
         Transaction.callContract(
           contract: _deployedContract,
           function: _addProductFunction,
-          parameters: [
-            event.batchId,
-            event.name,
-            BigInt.from(event.harvestDate),
-            BigInt.from(event.expiryDate),
-          ],
+          parameters: [event.batchId, event.name, BigInt.from(event.date)],
         ),
         chainId: 1337,
       );
@@ -252,7 +262,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         );
         products = productListFromContract
             .map((p) {
-              if (p is List && p.length == 7) {
+              // THAY ĐỔI: Product struct giờ chỉ có 6 trường thay vì 7
+              if (p is List && p.length == 6) {
                 return Product.fromContract(p);
               } else {
                 developer.log("WARN unexpected product format: $p");

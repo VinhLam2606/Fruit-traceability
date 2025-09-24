@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
 import 'package:untitled/dashboard/model/product.dart';
+import 'package:untitled/dashboard/ui/organization_management_page.dart'; // MỚI: Import trang quản lý
 
 class CreateProductPage extends StatelessWidget {
   const CreateProductPage({super.key});
@@ -27,8 +28,7 @@ class CreateProductView extends StatefulWidget {
 class _CreateProductViewState extends State<CreateProductView> {
   final TextEditingController batchIdController = TextEditingController();
   final TextEditingController nameController = TextEditingController();
-  final TextEditingController harvestDateController = TextEditingController();
-  final TextEditingController expiryDateController = TextEditingController();
+  final TextEditingController dateController = TextEditingController();
 
   // Helper để chuyển timestamp sang định dạng đọc được
   String _formatTimestamp(BigInt timestamp) {
@@ -42,7 +42,24 @@ class _CreateProductViewState extends State<CreateProductView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Product Traceability DApp')),
+      appBar: AppBar(
+        title: const Text('Product Dashboard'),
+        // MỚI: Thêm actions vào AppBar
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.group),
+            tooltip: 'Manage Organization',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const OrganizationManagementPage(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: BlocConsumer<DashboardBloc, DashboardState>(
         listenWhen: (previous, current) => current is! ProductsLoadedState,
         listener: (context, state) {
@@ -53,13 +70,9 @@ class _CreateProductViewState extends State<CreateProductView> {
                 backgroundColor: Colors.green,
               ),
             );
-            // Xóa nội dung trong các ô input sau khi thành công
             batchIdController.clear();
             nameController.clear();
-            harvestDateController.clear();
-            expiryDateController.clear();
-
-            // Tự động làm mới danh sách sản phẩm
+            dateController.clear();
             context.read<DashboardBloc>().add(FetchProductsEvent());
           } else if (state is DashboardErrorState) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -75,16 +88,13 @@ class _CreateProductViewState extends State<CreateProductView> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // Hiển thị giao diện chính
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: Column(
               children: [
-                // Form tạo sản phẩm
                 _buildCreateProductForm(context),
                 const SizedBox(height: 24),
                 const Divider(),
-                // Phần hiển thị danh sách sản phẩm
                 _buildProductList(context, state),
               ],
             ),
@@ -116,18 +126,8 @@ class _CreateProductViewState extends State<CreateProductView> {
         ),
         const SizedBox(height: 16),
         TextField(
-          controller: harvestDateController,
-          decoration: const InputDecoration(
-            labelText: "Harvest Date (Timestamp)",
-          ),
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: expiryDateController,
-          decoration: const InputDecoration(
-            labelText: "Expiry Date (Timestamp)",
-          ),
+          controller: dateController,
+          decoration: const InputDecoration(labelText: "Date (Timestamp)"),
           keyboardType: TextInputType.number,
         ),
         const SizedBox(height: 32),
@@ -137,8 +137,7 @@ class _CreateProductViewState extends State<CreateProductView> {
               CreateProductButtonPressedEvent(
                 batchId: batchIdController.text,
                 name: nameController.text,
-                harvestDate: int.tryParse(harvestDateController.text) ?? 0,
-                expiryDate: int.tryParse(expiryDateController.text) ?? 0,
+                date: int.tryParse(dateController.text) ?? 0,
               ),
             );
           },
@@ -190,17 +189,8 @@ class _CreateProductViewState extends State<CreateProductView> {
                               ),
                             ),
                             subtitle: Text("Batch ID: ${product.batchId}"),
-                            trailing: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  "Harvest: ${_formatTimestamp(product.harvestDate)}",
-                                ),
-                                Text(
-                                  "Expiry: ${_formatTimestamp(product.expiryDate)}",
-                                ),
-                              ],
+                            trailing: Text(
+                              "Date: ${_formatTimestamp(product.date)}",
                             ),
                           ),
                         );

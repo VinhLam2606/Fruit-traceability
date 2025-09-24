@@ -42,8 +42,8 @@ library Types {
         string name;
         string organizationName;
         address creator;
-        uint256 harvestDate;
-        uint256 expiryDate;
+        // THAY ĐỔI: Gộp harvestDate và expiryDate thành một trường 'date'
+        uint256 date;
         address currentOwner;
     }
 

@@ -9,33 +9,31 @@ class DashboardInitialFetchEvent extends DashboardEvent {}
 class FetchProductsEvent extends DashboardEvent {}
 
 // Event được kích hoạt khi người dùng nhấn nút tạo sản phẩm
+// THAY ĐỔI: Cập nhật event để sử dụng một trường 'date'
 class CreateProductButtonPressedEvent extends DashboardEvent {
   final String batchId;
   final String name;
-  final int harvestDate;
-  final int expiryDate;
+  final int date; // Gộp hai trường date cũ thành một
 
   CreateProductButtonPressedEvent({
     required this.batchId,
     required this.name,
-    required this.harvestDate,
-    required this.expiryDate,
+    required this.date, // Cập nhật constructor
   });
 }
 
-// Event mới: đăng ký tổ chức và tạo sản phẩm
+// Event mới: đăng ký tổ chức và tạo sản phẩm (giữ nguyên nếu logic không đổi)
 class RegisterOrgAndCreateProductEvent extends DashboardEvent {
   final String orgName;
   final String batchId;
   final String name;
-  final int harvestDate;
-  final int expiryDate;
+  final int date; // Cũng cần cập nhật ở đây nếu sử dụng
+  // Giả sử chỉ cần cập nhật ở event trên, nhưng để nhất quán thì nên sửa cả ở đây
 
   RegisterOrgAndCreateProductEvent({
     required this.orgName,
     required this.batchId,
     required this.name,
-    required this.harvestDate,
-    required this.expiryDate,
+    required this.date,
   });
 }
