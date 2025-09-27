@@ -1,9 +1,8 @@
-// dashboard/ui/create_product_page.dart
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:barcode_widget/barcode_widget.dart'; // Thêm package để render barcode
+import 'package:barcode_widget/barcode_widget.dart';
 import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
 import 'package:untitled/dashboard/model/product.dart';
 
@@ -29,6 +28,7 @@ class CreateProductView extends StatefulWidget {
 class _CreateProductViewState extends State<CreateProductView> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController dateController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   String _generateBatchId() {
     final random = Random();
@@ -44,6 +44,14 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 
   @override
+  void dispose() {
+    nameController.dispose();
+    dateController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Product Dashboard')),
@@ -52,14 +60,20 @@ class _CreateProductViewState extends State<CreateProductView> {
         listener: (context, state) {
           if (state is DashboardSuccessState) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message), backgroundColor: Colors.green),
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: Colors.green,
+              ),
             );
             nameController.clear();
             dateController.clear();
             context.read<DashboardBloc>().add(FetchProductsEvent());
           } else if (state is DashboardErrorState) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.error), backgroundColor: Colors.red),
+              SnackBar(
+                content: Text(state.error),
+                backgroundColor: Colors.red,
+              ),
             );
           }
         },
@@ -67,7 +81,8 @@ class _CreateProductViewState extends State<CreateProductView> {
           if (state is DashboardInitial && state is! DashboardLoadingState) {
             return const Center(child: Text("Initializing connection..."));
           }
-          if (state is DashboardLoadingState && state is! ProductsLoadedState) {
+          if (state is DashboardLoadingState &&
+              state is! ProductsLoadedState) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -147,40 +162,53 @@ class _CreateProductViewState extends State<CreateProductView> {
           ),
           const SizedBox(height: 16),
           if (state is DashboardLoadingState)
-            const Center(child: CircularProgressIndicator()),
+            const Expanded(
+              child: Center(child: CircularProgressIndicator()),
+            ),
           if (state is ProductsLoadedState)
             state.products.isEmpty
-                ? const Center(child: Text("No products found."))
+                ? const Expanded(
+              child: Center(child: Text("No products found.")),
+            )
                 : Expanded(
-              child: ListView.builder(
-                itemCount: state.products.length,
-                itemBuilder: (context, index) {
-                  final Product product = state.products[index];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      title: Text(
-                        product.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("Date: ${_formatTimestamp(product.date)}"),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            height: 80,
-                            child: BarcodeWidget(
-                              barcode: Barcode.code128(), // Kiểu barcode
-                              data: product.batchId,      // Sinh barcode từ batchId
-                              drawText: true,
-                            ),
+              child: Scrollbar(
+                controller: _scrollController,
+                thumbVisibility: true, // hiện thanh cuộn
+                child: ListView.builder(
+                  controller: _scrollController,
+                  itemCount: state.products.length,
+                  itemBuilder: (context, index) {
+                    final Product product = state.products[index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        title: Text(
+                          product.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
                           ),
-                        ],
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Date: ${_formatTimestamp(product.date)}",
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 80,
+                              child: BarcodeWidget(
+                                barcode: Barcode.code128(),
+                                data: product.batchId,
+                                drawText: true,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
         ],
