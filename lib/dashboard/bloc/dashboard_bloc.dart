@@ -41,7 +41,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     try {
       const String rpcUrl = "http://10.0.2.2:7545";
       const String privateKey =
-          "0x34e80e9b48d31a6e719ee02af8a4e8ebcf7d8fbb4404fa304c67b9c5943d7a08"; // THAY BẰNG PRIVATE KEY CỦA BẠN
+          "0xfeddc3ed22a0393e0403ebb77705e4ee2331bc61e1c140be1af3206ccf3832dc"; // THAY BẰNG PRIVATE KEY CỦA BẠN
 
       web3client = Web3Client(rpcUrl, http.Client());
 

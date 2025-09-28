@@ -22,7 +22,7 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
   Future<void> _initWeb3() async {
     const String rpcUrl = "http://10.0.2.2:7545";
     const String privateKey =
-        "YOUR_PRIVATE_KEY"; // THAY BẰNG PRIVATE KEY CỦA BẠN
+        "0xfeddc3ed22a0393e0403ebb77705e4ee2331bc61e1c140be1af3206ccf3832dc"; // THAY BẰNG PRIVATE KEY CỦA BẠN
 
     _web3client = Web3Client(rpcUrl, http.Client());
     final abiString = await rootBundle.loadString("build/contracts/Chain.json");

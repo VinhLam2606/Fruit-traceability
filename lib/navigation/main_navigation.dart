@@ -7,6 +7,7 @@ import 'package:untitled/dashboard/ui/account_page.dart';
 import 'package:untitled/dashboard/ui/create_product_page.dart';
 import 'package:untitled/dashboard/ui/home_page.dart';
 import 'package:untitled/dashboard/ui/organization_management_page.dart';
+import 'package:untitled/dashboard/ui/scan_barcode_page.dart';
 
 class MainNavigationPage extends StatefulWidget {
   const MainNavigationPage({super.key});
@@ -34,6 +35,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
         )..add(FetchOrganizationDetails()),
         child: const OrganizationManagementPage(),
       ),
+      const ScanBarcodePage(),
       const CreateProductPage(),
       const AccountPage(),
     ];
@@ -58,7 +60,6 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Text(
-                  // TRANSLATION: Changed the error message to English.
                   "Initialization Error: ${state.error}",
                   textAlign: TextAlign.center,
                 ),
@@ -72,17 +73,13 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.business),
-            label: 'Organization',
-          ),
+              icon: Icon(Icons.business), label: 'Organization'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.inventory_2),
-            label: 'Product',
-          ),
+              icon: Icon(Icons.qr_code_scanner), label: 'Scan'), // Scan button
           BottomNavigationBarItem(
-            icon: Icon(Icons.account_circle),
-            label: 'Account',
-          ),
+              icon: Icon(Icons.inventory_2), label: 'Product'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.account_circle), label: 'Account'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blueAccent,
