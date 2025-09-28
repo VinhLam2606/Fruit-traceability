@@ -1,21 +1,17 @@
-// dashboard/bloc/dashboard_event.dart
 part of 'dashboard_bloc.dart';
 
 sealed class DashboardEvent {}
 
-// Event để khởi tạo kết nối với blockchain
+// ----------------- PRODUCT EVENTS -----------------
 class DashboardInitialFetchEvent extends DashboardEvent {}
 
-// Event để tải danh sách sản phẩm
 class FetchProductsEvent extends DashboardEvent {}
 
-// Event được kích hoạt khi người dùng nhấn nút tạo sản phẩm
 class CreateProductButtonPressedEvent extends DashboardEvent {
   final String batchId;
   final String name;
   final int harvestDate;
   final int expiryDate;
-
   CreateProductButtonPressedEvent({
     required this.batchId,
     required this.name,

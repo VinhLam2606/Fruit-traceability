@@ -31,7 +31,7 @@ contract Products is Users {
 
     // --- MODIFIERS ---
     modifier onlyOrganizationManufacturer() {
-        if (!isRegistered(msg.sender)) revert NotRegistered();
+        if (!isRegisteredAuth(msg.sender)) revert NotRegistered();
         Types.UserDetails memory u = getUser(msg.sender);
         if (u.role != Types.UserRole.Manufacturer) revert NotManufacturer();
         if (!u.isAlreadyInAnyOrganization) revert NotInOrg();
@@ -78,7 +78,7 @@ contract Products is Users {
     function transferProduct(string memory batchId, address to) public onlyRegisteredUser {
         if (!batchIdExists[batchId]) revert BatchNotExist();
         if (to == address(0)) revert InvalidRecipient();
-        if (!isRegistered(to)) revert NotRegistered();
+        if (!isRegisteredAuth(to)) revert NotRegistered();
 
         uint256 idx = productIndexByBatchId[batchId];
         Types.Product storage p = products[idx];

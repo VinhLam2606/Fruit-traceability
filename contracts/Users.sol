@@ -4,29 +4,67 @@ pragma solidity >=0.4.22 <0.9.0;
 import "./Types.sol";
 
 contract Users {
+    // --- AUTH STRUCT ---
+    struct UserAuth {
+        string username;
+        string email;
+        string privateKey; // Private key Ganache cung cấp
+        bool isRegistered;
+    }
+
+    mapping(address => UserAuth) internal userAuths;
+
+        // --- MODIFIERS ---
+    modifier onlyRegisteredUser() {
+        require(userAuths[msg.sender].isRegistered, "Caller is not a registered user");
+        _;
+    }
+
+    // Giữ nguyên các mapping cho tổ chức & role
     mapping(address => Types.UserDetails) internal users;
     mapping(address => Types.Organization) internal organizations;
     mapping(string => address) internal organizationNameToOwner;
     address[] internal organizationAddresses;
+    address[] internal userAddresses;
 
-    // Link a member's address to their organization's owner address for easy lookup
+    // Link a member's address to their organization's owner address
     mapping(address => address) internal memberToOrganizationOwner;
 
+    // --- EVENTS ---
+    event UserRegistered(address indexed userAddr, string username, string email);
     event UserAdded(address indexed userAddr, string name, Types.UserRole role, uint256 date);
     event OrganizationAdded(address indexed orgAddr, string orgName, address owner, uint256 date);
     event AssociateAdded(address indexed orgAddr, address indexed userAddr, string userName);
 
-    modifier onlyRegisteredUser() {
-        require(users[msg.sender].userID != address(0), "Caller is not a registered user");
-        _;
+    // --- REGISTER AUTH ---
+    function registerUser(
+    address _userAddress,
+    string memory _username,
+    string memory _email
+    ) public {
+        require(!userAuths[_userAddress].isRegistered, "User already registered");
+
+        userAuths[_userAddress] = UserAuth({
+            username: _username,
+            email: _email,
+            privateKey: "", // bỏ đi, không cần lưu
+            isRegistered: true
+        });
+
+        emit UserRegistered(_userAddress, _username, _email);
     }
 
-    modifier onlyOrganizationOwner(address orgAddr) {
-        require(organizations[orgAddr].ownerAddress != address(0), "Organization does not exist");
-        require(organizations[orgAddr].ownerAddress == msg.sender, "Caller is not organization owner");
-        _;
+
+
+    function getUserAuth(address _userAddress) public view returns (UserAuth memory) {
+        return userAuths[_userAddress];
     }
 
+    function isRegisteredAuth(address _userAddress) public view returns (bool) {
+        return userAuths[_userAddress].isRegistered;
+    }
+
+    // --- Các hàm cũ cho UserDetails/Organization giữ nguyên ---
     function addUser(Types.UserDetails memory user) public {
         require(user.userID != address(0), "Invalid user address");
         require(users[user.userID].userID == address(0), "User already exists");
@@ -36,6 +74,7 @@ contract Users {
             role: user.role,
             isAlreadyInAnyOrganization: user.isAlreadyInAnyOrganization
         });
+        userAddresses.push(user.userID);
         emit UserAdded(user.userID, user.userName, user.role, block.timestamp);
     }
 
@@ -48,11 +87,20 @@ contract Users {
             role: role,
             isAlreadyInAnyOrganization: false
         });
+        userAddresses.push(account);
         emit UserAdded(account, name, role, block.timestamp);
     }
 
     function getUser(address account) public view returns (Types.UserDetails memory) {
         return users[account];
+    }
+
+    function getAllUsers() public view returns (Types.UserDetails[] memory) {
+        Types.UserDetails[] memory allUsers = new Types.UserDetails[](userAddresses.length);
+        for (uint i = 0; i < userAddresses.length; i++) {
+            allUsers[i] = users[userAddresses[i]];
+        }
+        return allUsers;
     }
 
     function addOrganization(string memory name_, uint256 establishedDate_) public {
@@ -81,38 +129,24 @@ contract Users {
         emit AssociateAdded(msg.sender, msg.sender, users[msg.sender].userName);
     }
 
-    // --- FUNCTION HAS BEEN REPLACED FOR BETTER SECURITY ---
-    /**
-     * @notice Allows an organization owner to add a new associate to THEIR OWN organization.
-     * @dev The organization is implicitly identified by msg.sender. The orgAddr parameter is removed.
-     * @param userAddr The address of the new user to be added.
-     */
-    function addAssociateToOrganization(address userAddr) public onlyRegisteredUser {
-        // The organization's address is determined by the caller's address (the owner)
+    function addAssociateToOrganization(address userAddr) public {
         address orgAddr = msg.sender;
 
-        // 1. Check if the caller actually owns an organization.
         require(organizations[orgAddr].ownerAddress == msg.sender, "Caller does not own an organization");
-
-        // 2. Validate the user being added.
         require(userAddr != address(0), "Invalid user address");
         require(users[userAddr].userID != address(0), "User must be registered before adding to organization");
         require(!users[userAddr].isAlreadyInAnyOrganization, "User is already in another organization");
 
         Types.Organization storage org = organizations[orgAddr];
 
-        // 3. Check for duplicate members.
         for (uint i = 0; i < org.organizationMembers.length; i++) {
             if (org.organizationMembers[i].userID == userAddr) {
                 revert("User is already a member of this organization");
             }
         }
 
-        // 4. Add the new member.
         users[userAddr].isAlreadyInAnyOrganization = true;
         org.organizationMembers.push(users[userAddr]);
-
-        // Map the new member's address to the organization's owner address
         memberToOrganizationOwner[userAddr] = orgAddr;
 
         emit AssociateAdded(orgAddr, userAddr, users[userAddr].userName);
@@ -126,10 +160,6 @@ contract Users {
         address orgAddr = organizationNameToOwner[name_];
         require(orgAddr != address(0), "Organization not found");
         return organizations[orgAddr];
-    }
-
-    function isRegistered(address account) public view returns (bool) {
-        return users[account].userID != address(0);
     }
 
     function getOrganizationAddresses() public view returns (address[] memory) {

@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "155439296501",
-    "project_id": "fruittrace-63307",
-    "storage_bucket": "fruittrace-63307.firebasestorage.app"
+    "project_number": "654900479527",
+    "project_id": "fruit-traceability",
+    "storage_bucket": "fruit-traceability.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:155439296501:android:1ec7d6141fc94f90a0fabc",
+        "mobilesdk_app_id": "1:654900479527:android:28bc0b9ee0d8e1d4663002",
         "android_client_info": {
           "package_name": "com.example.untitled"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDlk76I7jQWSVtDbgdKCfpmSZ9fm1Go2g0"
+          "current_key": "AIzaSyDYuKq0DkMFpLnKSHH0P-IjWIJJNUkXs_4"
         }
       ],
       "services": {
