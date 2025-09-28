@@ -1,8 +1,11 @@
-// auth_layout.dart
+// lib/auth/auth_layout.dart
+
 import 'package:flutter/material.dart';
+// ✅ Thêm import cho trang điều hướng chính của bạn
+import 'package:untitled/navigation/main_navigation.dart';
+
 import 'service/auth_service.dart';
-import 'ui/home_page.dart';
-import 'ui/welcome_page.dart';
+import 'ui/login_or_register_page.dart';
 
 class AppLoadingPage extends StatelessWidget {
   const AppLoadingPage({super.key});
@@ -18,43 +21,29 @@ class AppNavigationLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Fruit Traceability Dashboard"),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await authService.value.signOut();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("✅ Signed out successfully")),
-              );
-            },
-          ),
-        ],
-      ),
-      body: const HomePage(), // ✅ show your real homepage
-    );
+    // 🚀 THAY ĐỔI CHÍNH
+    // Trả về MainNavigationPage thay vì HomePage hoặc một Scaffold tùy chỉnh.
+    // MainNavigationPage đã chứa tất cả logic bạn cần cho màn hình chính.
+    return const MainNavigationPage();
   }
 }
 
 class AuthLayout extends StatelessWidget {
-  const AuthLayout({super.key, this.pageIfNotConnected});
-
-  final Widget? pageIfNotConnected;
+  const AuthLayout({super.key});
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder(
-      stream:
-          authService.value.authStateChanges, // ✅ listen directly to Firebase
+      stream: authService.value.authStateChanges,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const AppLoadingPage();
         } else if (snapshot.hasData) {
-          return const AppNavigationLayout(); // logged in
+          // Người dùng đã đăng nhập, hiển thị AppNavigationLayout
+          return const AppNavigationLayout();
         } else {
-          return pageIfNotConnected ?? const WelcomePage(); // logged out
+          // Người dùng chưa đăng nhập, hiển thị trang đăng nhập/đăng ký
+          return const LoginOrRegisterPage();
         }
       },
     );

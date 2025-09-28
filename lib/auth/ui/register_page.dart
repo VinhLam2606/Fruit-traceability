@@ -5,18 +5,17 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:encrypt/encrypt.dart' as encrypt;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:flutter_bloc/flutter_bloc.dart'; // Add this import
 import 'package:http/http.dart';
 import 'package:untitled/auth/service/auth_service.dart';
-import 'package:untitled/dashboard/bloc/dashboard_bloc.dart'; // Add this import
-import 'package:untitled/navigation/main_navigation.dart'; // Add this import
 import 'package:web3dart/crypto.dart' as crypto;
 import 'package:web3dart/web3dart.dart';
 
 class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+  final Function()? onTap; // Add this
+  const RegisterPage({super.key, this.onTap}); // And this
 
   @override
   State<RegisterPage> createState() => _RegisterPageState();
@@ -30,6 +29,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   String accountType = "user"; // default
   String errorMessage = '';
+  bool _isLoading = false;
 
   late Web3Client ethClient;
   DeployedContract? usersContract;
@@ -60,10 +60,6 @@ class _RegisterPageState extends State<RegisterPage> {
     );
 
     final encrypted = encrypter.encrypt(privateKey, iv: iv);
-
-    print("🔑 Plain private key: $privateKey");
-    print("🔒 Encrypted (Base64): ${encrypted.base64}");
-
     return encrypted.base64;
   }
 
@@ -73,13 +69,11 @@ class _RegisterPageState extends State<RegisterPage> {
       final abiJson = jsonDecode(
         await rootBundle.loadString("build/contracts/Users.json"),
       );
-
       final abi = jsonEncode(abiJson["abi"]);
-      final networkId = "5777";
+      const networkId = "5777";
       final contractAddr = EthereumAddress.fromHex(
         abiJson["networks"][networkId]["address"],
       );
-
       usersContract = DeployedContract(
         ContractAbi.fromJson(abi, "Users"),
         contractAddr,
@@ -92,11 +86,9 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Future<bool> _isBlockchainAvailable() async {
     try {
-      final netVersion = await ethClient.getNetworkId();
-      print("✅ Connected to network $netVersion");
+      await ethClient.getNetworkId();
       return true;
     } catch (e) {
-      print("❌ Blockchain unavailable: $e");
       return false;
     }
   }
@@ -107,15 +99,12 @@ class _RegisterPageState extends State<RegisterPage> {
     String email,
     String walletAddr,
   ) async {
-    if (usersContract == null) {
-      throw Exception("Contract not loaded");
-    }
+    if (usersContract == null) throw Exception("Contract not loaded");
 
     final registerFn = usersContract!.function("registerUser");
-
     final adminKey = EthPrivateKey.fromHex(
-      "0xb5ae0178b193c626861663e32cef47f0c67871ea80c655ac727a642a070f45e6", // Ganache acc[0]
-    );
+      "0xb5ae0178b193c626861663e32cef47f0c67871ea80c655ac727a642a070f45e6",
+    ); // Ganache acc[0]
 
     await ethClient.sendTransaction(
       adminKey,
@@ -131,44 +120,41 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   void register() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate() || _isLoading) return;
+
+    setState(() => _isLoading = true);
 
     try {
       if (!await _isBlockchainAvailable()) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("⚠️ Ganache/Truffle not running")),
         );
+        setState(() => _isLoading = false);
         return;
       }
 
-      // Generate wallet
       final credentials = EthPrivateKey.createRandom(Random.secure());
       final walletAddress = credentials.address.hex;
       final privateKey = crypto.bytesToHex(
         credentials.privateKey,
         include0x: true,
       );
-      print("➡ Wallet generated: $walletAddress");
-
       final encryptedKey = _encryptPrivateKey(
         privateKey,
         passwordController.text.trim(),
       );
 
-      // Register on blockchain
       await _registerOnBlockchain(
         emailController.text.trim().split('@')[0],
         emailController.text.trim(),
         walletAddress,
       );
 
-      // Firebase Auth
       final userCred = await authService.value.createAccount(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
 
-      // Firestore
       await FirebaseFirestore.instance
           .collection("users")
           .doc(userCred.user!.uid)
@@ -184,139 +170,142 @@ class _RegisterPageState extends State<RegisterPage> {
         const SnackBar(content: Text("✅ Registered successfully")),
       );
 
-      // --- MODIFICATION START ---
-      // Navigate to MainNavigationPage, providing it with a DashboardBloc.
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => BlocProvider(
-            create: (context) =>
-                DashboardBloc()..add(DashboardInitialFetchEvent()),
-            child: const MainNavigationPage(),
-          ),
-        ),
-      );
-      // --- MODIFICATION END ---
+      // No need to navigate here, AuthLayout will handle it automatically
     } catch (e) {
-      setState(() {
-        errorMessage = e.toString();
-      });
+      setState(() => errorMessage = e.toString());
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("❌ Registration failed: $errorMessage")),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black87,
-      appBar: AppBar(
-        backgroundColor: Colors.black87,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          "Fruit Traceability",
-          style: TextStyle(color: Colors.white),
-        ),
-        centerTitle: true,
-      ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                const SizedBox(height: 40),
-                const Text(
-                  "Create Account",
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 30),
-                DropdownButtonFormField<String>(
-                  value: accountType, // Use value instead of initialValue
-                  dropdownColor: Colors.black,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: _inputDecoration("Account Type"),
-                  items: const [
-                    DropdownMenuItem(value: "user", child: Text("Normal User")),
-                    DropdownMenuItem(
-                      value: "organization",
-                      child: Text("Organization"),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 40),
+                  const Text(
+                    "Create Account",
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
-                  ],
-                  onChanged: (value) {
-                    setState(() {
-                      accountType = value!;
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: emailController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: _inputDecoration("Email"),
-                  validator: (value) =>
-                      value == null || value.isEmpty ? "Enter email" : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: passwordController,
-                  obscureText: true,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: _inputDecoration("Password"),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Enter password";
-                    }
-                    if (value.length < 6) {
-                      return "Password must be >= 6 chars";
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: confirmPasswordController,
-                  obscureText: true,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: _inputDecoration("Confirm Password"),
-                  validator: (value) {
-                    if (value != passwordController.text) {
-                      return "Passwords do not match";
-                    }
-                    return null;
-                  },
-                ),
-                const Spacer(),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: register,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.greenAccent,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
+                  ),
+                  const SizedBox(height: 30),
+                  DropdownButtonFormField<String>(
+                    value: accountType,
+                    dropdownColor: Colors.black,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _inputDecoration("Account Type"),
+                    items: const [
+                      DropdownMenuItem(
+                        value: "user",
+                        child: Text("Normal User"),
                       ),
-                    ),
-                    child: const Text(
-                      "Register",
-                      style: TextStyle(fontSize: 16),
+                      DropdownMenuItem(
+                        value: "organization",
+                        child: Text("Organization"),
+                      ),
+                    ],
+                    onChanged: (value) => setState(() => accountType = value!),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: emailController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _inputDecoration("Email"),
+                    validator: (v) =>
+                        v == null || v.isEmpty ? "Enter email" : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: passwordController,
+                    obscureText: true,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _inputDecoration("Password"),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return "Enter password";
+                      if (v.length < 6) return "Password must be >= 6 chars";
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: confirmPasswordController,
+                    obscureText: true,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _inputDecoration("Confirm Password"),
+                    validator: (v) {
+                      if (v != passwordController.text)
+                        return "Passwords do not match";
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 30),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: register,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.greenAccent,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.black,
+                              ),
+                            )
+                          : const Text(
+                              "Register",
+                              style: TextStyle(fontSize: 16),
+                            ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
-              ],
+                  const SizedBox(height: 24),
+                  // --- MODIFICATION START ---
+                  RichText(
+                    text: TextSpan(
+                      text: "Already have an account? ",
+                      style: const TextStyle(color: Colors.white54),
+                      children: [
+                        TextSpan(
+                          text: "Login now",
+                          style: const TextStyle(
+                            color: Colors.blueAccent,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.underline,
+                          ),
+                          recognizer: TapGestureRecognizer()
+                            ..onTap = widget.onTap,
+                        ),
+                      ],
+                    ),
+                  ),
+                  // --- MODIFICATION END ---
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
           ),
         ),
@@ -332,7 +321,7 @@ class _RegisterPageState extends State<RegisterPage> {
       fillColor: Colors.black45,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide.none, // remove the default border
+        borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
