@@ -127,4 +127,25 @@ contract Products is Users {
         for (uint i = 0; i < indices.length; i++) res[i] = products[indices[i]];
         return res;
     }
+
+    // --- NEW: Get products by organization name ---
+    function getProductsByOrg(string memory orgName) public view returns (Types.Product[] memory) {
+        uint count = 0;
+        for (uint i = 0; i < products.length; i++) {
+            if (keccak256(bytes(products[i].organizationName)) == keccak256(bytes(orgName))) {
+                count++;
+            }
+        }
+
+        Types.Product[] memory res = new Types.Product[](count);
+        uint index = 0;
+        for (uint i = 0; i < products.length; i++) {
+            if (keccak256(bytes(products[i].organizationName)) == keccak256(bytes(orgName))) {
+                res[index] = products[i];
+                index++;
+            }
+        }
+
+        return res;
+    }
 }

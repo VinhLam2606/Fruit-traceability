@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:bloc/bloc.dart';
 import 'package:flutter/services.dart';
@@ -15,17 +16,25 @@ part 'dashboard_state.dart';
 
 class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   DashboardBloc() : super(DashboardInitial()) {
+    developer.log("DEBUG DashboardBloc created");
+
     on<DashboardInitialFetchEvent>(_dashboardInitialFetchEvent);
     on<CreateProductButtonPressedEvent>(_createProductButtonPressedEvent);
     on<FetchProductsEvent>(_fetchProductsEvent);
+    on<RegisterOrgAndCreateProductEvent>(_registerOrgAndCreateProductEvent);
   }
 
   late Web3Client _web3client;
   late DeployedContract _deployedContract;
   late EthPrivateKey _credentials;
 
+  // Contract functions
   late ContractFunction _addProductFunction;
-  late ContractFunction _getAllProductsFunction;
+  late ContractFunction _addOrganizationFunction;
+  late ContractFunction _getProductsByUserFunction;
+  late ContractFunction _addUserFunction;
+  late ContractFunction _isRegisteredFunction;
+  late ContractFunction _isOrganizationExistsFunction;
 
   FutureOr<void> _dashboardInitialFetchEvent(
     DashboardInitialFetchEvent event,
@@ -33,9 +42,10 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   ) async {
     emit(DashboardLoadingState());
     try {
-      const String rpcUrl = "http://10.0.2.2:7545"; 
+      const String rpcUrl = "http://10.0.2.2:7545";
       const String privateKey =
-          "0xf4e8a077c99a5df3439ecb039b70984c507c842e3deef53aa08cacebcd728d0f"; 
+          // Thay bằng private key mới của bạn khi test
+          "0x47dc79f0adfd1ac50bbdedb9b0ba2bcf3146453972aba05fca84c26def5c0a20";
 
       _web3client = Web3Client(rpcUrl, http.Client());
 
@@ -61,11 +71,81 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       _deployedContract = DeployedContract(abi, contractAddress);
 
       _addProductFunction = _deployedContract.function('addAProduct');
-      _getAllProductsFunction = _deployedContract.function('getAllProducts');
+      _addOrganizationFunction = _deployedContract.function('addOrganization');
+      _getProductsByUserFunction = _deployedContract.function(
+        'getProductsByUser',
+      );
+      _addUserFunction = _deployedContract.function('addUserThroughAddress');
+      _isRegisteredFunction = _deployedContract.function('isRegistered');
+      _isOrganizationExistsFunction = _deployedContract.function(
+        'isOrganizationExists',
+      );
+
+      developer.log(
+        "DEBUG Dashboard initialized with contract at $contractAddress",
+      );
 
       emit(DashboardInitialSuccessState());
     } catch (e) {
       emit(DashboardErrorState("Initialization failed: ${e.toString()}"));
+    }
+  }
+
+  /// Đảm bảo user đã đăng ký và có tổ chức (tự tạo mới nếu chưa có).
+  Future<void> _ensureUserAndOrgRegistered(String orgName) async {
+    final address = await _credentials.extractAddress();
+
+    // 1. Check user đã tồn tại chưa
+    final isRegisteredResult = await _web3client.call(
+      contract: _deployedContract,
+      function: _isRegisteredFunction,
+      params: [address],
+    );
+    final alreadyRegistered = isRegisteredResult[0] as bool;
+
+    if (!alreadyRegistered) {
+      developer.log("DEBUG registering user for $address...");
+      await _web3client.sendTransaction(
+        _credentials,
+        Transaction.callContract(
+          contract: _deployedContract,
+          function: _addUserFunction,
+          parameters: [
+            address,
+            "Default Manufacturer",
+            BigInt.from(1),
+          ], // 1 = Manufacturer
+        ),
+        chainId: 1337,
+      );
+    } else {
+      developer.log("DEBUG user already registered: $address");
+    }
+
+    // 2. Check tổ chức đã tồn tại chưa
+    final orgExistsResult = await _web3client.call(
+      contract: _deployedContract,
+      function: _isOrganizationExistsFunction,
+      params: [orgName],
+    );
+    final alreadyOrgExists = orgExistsResult[0] as bool;
+
+    if (!alreadyOrgExists) {
+      developer.log("DEBUG creating new organization: $orgName");
+      await _web3client.sendTransaction(
+        _credentials,
+        Transaction.callContract(
+          contract: _deployedContract,
+          function: _addOrganizationFunction,
+          parameters: [
+            orgName,
+            BigInt.from(DateTime.now().millisecondsSinceEpoch ~/ 1000),
+          ],
+        ),
+        chainId: 1337,
+      );
+    } else {
+      developer.log("DEBUG organization already exists: $orgName");
     }
   }
 
@@ -75,6 +155,14 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   ) async {
     emit(DashboardLoadingState());
     try {
+      developer.log("DEBUG creating product: ${event.name}");
+
+      // đảm bảo user + org tồn tại
+      final orgName = "Org_${(await _credentials.extractAddress()).hex}";
+      await _ensureUserAndOrgRegistered(orgName);
+
+      developer.log("DEBUG calling addAProduct...");
+
       final txHash = await _web3client.sendTransaction(
         _credentials,
         Transaction.callContract(
@@ -87,12 +175,53 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
             BigInt.from(event.expiryDate),
           ],
         ),
-        chainId: 5777, 
+        chainId: 1337,
       );
 
-      emit(DashboardSuccessState("Product created! TxHash: $txHash"));
+      emit(
+        DashboardSuccessState("Product created successfully! TxHash: $txHash"),
+      );
     } catch (e) {
       emit(DashboardErrorState("Failed to create product: ${e.toString()}"));
+    }
+  }
+
+  FutureOr<void> _registerOrgAndCreateProductEvent(
+    RegisterOrgAndCreateProductEvent event,
+    Emitter<DashboardState> emit,
+  ) async {
+    emit(DashboardLoadingState());
+    try {
+      developer.log("DEBUG registering org: ${event.orgName}");
+
+      await _ensureUserAndOrgRegistered(event.orgName);
+
+      final txHash = await _web3client.sendTransaction(
+        _credentials,
+        Transaction.callContract(
+          contract: _deployedContract,
+          function: _addProductFunction,
+          parameters: [
+            event.batchId,
+            event.name,
+            BigInt.from(event.harvestDate),
+            BigInt.from(event.expiryDate),
+          ],
+        ),
+        chainId: 1337,
+      );
+
+      emit(
+        DashboardSuccessState(
+          "Organization registered & product created! TxHash: $txHash",
+        ),
+      );
+    } catch (e) {
+      emit(
+        DashboardErrorState(
+          "Failed to register org and create product: ${e.toString()}",
+        ),
+      );
     }
   }
 
@@ -102,16 +231,44 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   ) async {
     emit(DashboardLoadingState());
     try {
+      developer.log("DEBUG fetching products...");
+
+      final address = await _credentials.extractAddress();
       final result = await _web3client.call(
         contract: _deployedContract,
-        function: _getAllProductsFunction,
-        params: [],
+        function: _getProductsByUserFunction,
+        params: [address],
       );
 
-      final List<dynamic> productListFromContract = result[0];
-      final List<Product> products = productListFromContract
-          .map((p) => Product.fromContract(p as List<dynamic>))
-          .toList();
+      developer.log("DEBUG getProductsByUser raw result: $result");
+
+      final raw = result[0];
+      final List<Product> products;
+
+      if (raw is List && raw.isEmpty) {
+        products = [];
+      } else if (raw is List && raw.isNotEmpty && raw.first is List) {
+        final List<dynamic> productListFromContract = raw;
+        developer.log(
+          "DEBUG productListFromContract length: ${productListFromContract.length}",
+        );
+        products = productListFromContract
+            .map((p) {
+              if (p is List && p.length == 7) {
+                return Product.fromContract(p);
+              } else {
+                developer.log("WARN unexpected product format: $p");
+                return null;
+              }
+            })
+            .whereType<Product>()
+            .toList();
+      } else {
+        developer.log("WARN unexpected raw format: $raw");
+        products = [];
+      }
+
+      developer.log("DEBUG parsed products length: ${products.length}");
 
       emit(ProductsLoadedState(products));
     } catch (e) {

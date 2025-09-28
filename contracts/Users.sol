@@ -27,7 +27,6 @@ contract Users {
     address[] internal organizationAddresses;
     address[] internal userAddresses;
 
-    // Link a member's address to their organization's owner address
     mapping(address => address) internal memberToOrganizationOwner;
 
     // --- EVENTS ---
@@ -129,7 +128,7 @@ contract Users {
         emit AssociateAdded(msg.sender, msg.sender, users[msg.sender].userName);
     }
 
-    function addAssociateToOrganization(address userAddr) public {
+    function addAssociateToOrganization(address userAddr) public onlyRegisteredUser {
         address orgAddr = msg.sender;
 
         require(organizations[orgAddr].ownerAddress == msg.sender, "Caller does not own an organization");
@@ -147,6 +146,7 @@ contract Users {
 
         users[userAddr].isAlreadyInAnyOrganization = true;
         org.organizationMembers.push(users[userAddr]);
+
         memberToOrganizationOwner[userAddr] = orgAddr;
 
         emit AssociateAdded(orgAddr, userAddr, users[userAddr].userName);
@@ -160,6 +160,15 @@ contract Users {
         address orgAddr = organizationNameToOwner[name_];
         require(orgAddr != address(0), "Organization not found");
         return organizations[orgAddr];
+    }
+
+    function isRegistered(address account) public view returns (bool) {
+        return users[account].userID != address(0);
+    }
+
+    // ✅ New helper
+    function isOrganizationExists(string memory name_) public view returns (bool) {
+        return organizationNameToOwner[name_] != address(0);
     }
 
     function getOrganizationAddresses() public view returns (address[] memory) {
