@@ -2,15 +2,18 @@
 
 import 'dart:convert';
 import 'dart:math';
+
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:untitled/auth/service/auth_service.dart';
-import 'package:web3dart/web3dart.dart';
-import 'package:web3dart/crypto.dart' as crypto;
-import 'package:encrypt/encrypt.dart' as encrypt;
-import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'package:flutter_bloc/flutter_bloc.dart'; // Add this import
 import 'package:http/http.dart';
-import 'package:untitled/auth/ui/home_page.dart';
+import 'package:untitled/auth/service/auth_service.dart';
+import 'package:untitled/dashboard/bloc/dashboard_bloc.dart'; // Add this import
+import 'package:untitled/navigation/main_navigation.dart'; // Add this import
+import 'package:web3dart/crypto.dart' as crypto;
+import 'package:web3dart/web3dart.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -111,7 +114,7 @@ class _RegisterPageState extends State<RegisterPage> {
     final registerFn = usersContract!.function("registerUser");
 
     final adminKey = EthPrivateKey.fromHex(
-      "0xb8cae66edd35ebe9a75354e6bc83b00bd3a9a6cfcbb73c204da8b4f8b45919e6", // Ganache acc[0]
+      "0xb5ae0178b193c626861663e32cef47f0c67871ea80c655ac727a642a070f45e6", // Ganache acc[0]
     );
 
     await ethClient.sendTransaction(
@@ -181,10 +184,19 @@ class _RegisterPageState extends State<RegisterPage> {
         const SnackBar(content: Text("✅ Registered successfully")),
       );
 
+      // --- MODIFICATION START ---
+      // Navigate to MainNavigationPage, providing it with a DashboardBloc.
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const HomePage()),
+        MaterialPageRoute(
+          builder: (context) => BlocProvider(
+            create: (context) =>
+                DashboardBloc()..add(DashboardInitialFetchEvent()),
+            child: const MainNavigationPage(),
+          ),
+        ),
       );
+      // --- MODIFICATION END ---
     } catch (e) {
       setState(() {
         errorMessage = e.toString();
@@ -230,7 +242,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
                 const SizedBox(height: 30),
                 DropdownButtonFormField<String>(
-                  initialValue: accountType,
+                  value: accountType, // Use value instead of initialValue
                   dropdownColor: Colors.black,
                   style: const TextStyle(color: Colors.white),
                   decoration: _inputDecoration("Account Type"),
@@ -318,7 +330,18 @@ class _RegisterPageState extends State<RegisterPage> {
       hintStyle: const TextStyle(color: Colors.white54),
       filled: true,
       fillColor: Colors.black45,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide.none, // remove the default border
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Colors.greenAccent),
+      ),
     );
   }
 }

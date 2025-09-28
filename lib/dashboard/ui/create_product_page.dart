@@ -1,7 +1,8 @@
-// dashboard/ui/create_product_page.dart
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:barcode_widget/barcode_widget.dart';
 import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
 import 'package:untitled/dashboard/model/product.dart';
 
@@ -25,12 +26,15 @@ class CreateProductView extends StatefulWidget {
 }
 
 class _CreateProductViewState extends State<CreateProductView> {
-  final TextEditingController batchIdController = TextEditingController();
   final TextEditingController nameController = TextEditingController();
-  final TextEditingController harvestDateController = TextEditingController();
-  final TextEditingController expiryDateController = TextEditingController();
+  final TextEditingController dateController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
-  // Helper để chuyển timestamp sang định dạng đọc được
+  String _generateBatchId() {
+    final random = Random();
+    return (100000 + random.nextInt(900000)).toString(); // random 6 số
+  }
+
   String _formatTimestamp(BigInt timestamp) {
     if (timestamp == BigInt.zero) return "N/A";
     final dateTime = DateTime.fromMillisecondsSinceEpoch(
@@ -40,9 +44,17 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 
   @override
+  void dispose() {
+    nameController.dispose();
+    dateController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Product Traceability DApp')),
+      appBar: AppBar(title: const Text('Product Dashboard')),
       body: BlocConsumer<DashboardBloc, DashboardState>(
         listenWhen: (previous, current) => current is! ProductsLoadedState,
         listener: (context, state) {
@@ -53,17 +65,15 @@ class _CreateProductViewState extends State<CreateProductView> {
                 backgroundColor: Colors.green,
               ),
             );
-            // Xóa nội dung trong các ô input sau khi thành công
-            batchIdController.clear();
             nameController.clear();
-            harvestDateController.clear();
-            expiryDateController.clear();
-
-            // Tự động làm mới danh sách sản phẩm
+            dateController.clear();
             context.read<DashboardBloc>().add(FetchProductsEvent());
           } else if (state is DashboardErrorState) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.error), backgroundColor: Colors.red),
+              SnackBar(
+                content: Text(state.error),
+                backgroundColor: Colors.red,
+              ),
             );
           }
         },
@@ -71,20 +81,18 @@ class _CreateProductViewState extends State<CreateProductView> {
           if (state is DashboardInitial && state is! DashboardLoadingState) {
             return const Center(child: Text("Initializing connection..."));
           }
-          if (state is DashboardLoadingState && state is! ProductsLoadedState) {
+          if (state is DashboardLoadingState &&
+              state is! ProductsLoadedState) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // Hiển thị giao diện chính
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: Column(
               children: [
-                // Form tạo sản phẩm
                 _buildCreateProductForm(context),
                 const SizedBox(height: 24),
                 const Divider(),
-                // Phần hiển thị danh sách sản phẩm
                 _buildProductList(context, state),
               ],
             ),
@@ -94,7 +102,6 @@ class _CreateProductViewState extends State<CreateProductView> {
     );
   }
 
-  // Widget cho form tạo sản phẩm
   Widget _buildCreateProductForm(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -106,39 +113,24 @@ class _CreateProductViewState extends State<CreateProductView> {
         ),
         const SizedBox(height: 24),
         TextField(
-          controller: batchIdController,
-          decoration: const InputDecoration(labelText: "Batch ID"),
-        ),
-        const SizedBox(height: 16),
-        TextField(
           controller: nameController,
           decoration: const InputDecoration(labelText: "Product Name"),
         ),
         const SizedBox(height: 16),
         TextField(
-          controller: harvestDateController,
-          decoration: const InputDecoration(
-            labelText: "Harvest Date (Timestamp)",
-          ),
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: expiryDateController,
-          decoration: const InputDecoration(
-            labelText: "Expiry Date (Timestamp)",
-          ),
+          controller: dateController,
+          decoration: const InputDecoration(labelText: "Date (Timestamp)"),
           keyboardType: TextInputType.number,
         ),
         const SizedBox(height: 32),
         ElevatedButton(
           onPressed: () {
+            final generatedBatchId = _generateBatchId();
             context.read<DashboardBloc>().add(
               CreateProductButtonPressedEvent(
-                batchId: batchIdController.text,
+                batchId: generatedBatchId,
                 name: nameController.text,
-                harvestDate: int.tryParse(harvestDateController.text) ?? 0,
-                expiryDate: int.tryParse(expiryDateController.text) ?? 0,
+                date: int.tryParse(dateController.text) ?? 0,
               ),
             );
           },
@@ -148,7 +140,6 @@ class _CreateProductViewState extends State<CreateProductView> {
     );
   }
 
-  // Widget cho danh sách sản phẩm
   Widget _buildProductList(BuildContext context, DashboardState state) {
     return Expanded(
       child: Column(
@@ -171,42 +162,55 @@ class _CreateProductViewState extends State<CreateProductView> {
           ),
           const SizedBox(height: 16),
           if (state is DashboardLoadingState)
-            const Center(child: CircularProgressIndicator()),
+            const Expanded(
+              child: Center(child: CircularProgressIndicator()),
+            ),
           if (state is ProductsLoadedState)
             state.products.isEmpty
-                ? const Center(child: Text("No products found."))
+                ? const Expanded(
+              child: Center(child: Text("No products found.")),
+            )
                 : Expanded(
-                    child: ListView.builder(
-                      itemCount: state.products.length,
-                      itemBuilder: (context, index) {
-                        final Product product = state.products[index];
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            title: Text(
-                              product.name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
+              child: Scrollbar(
+                controller: _scrollController,
+                thumbVisibility: true, // hiện thanh cuộn
+                child: ListView.builder(
+                  controller: _scrollController,
+                  itemCount: state.products.length,
+                  itemBuilder: (context, index) {
+                    final Product product = state.products[index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        title: Text(
+                          product.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Date: ${_formatTimestamp(product.date)}",
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 80,
+                              child: BarcodeWidget(
+                                barcode: Barcode.code128(),
+                                data: product.batchId,
+                                drawText: true,
                               ),
                             ),
-                            subtitle: Text("Batch ID: ${product.batchId}"),
-                            trailing: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  "Harvest: ${_formatTimestamp(product.harvestDate)}",
-                                ),
-                                Text(
-                                  "Expiry: ${_formatTimestamp(product.expiryDate)}",
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
         ],
       ),
     );

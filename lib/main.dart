@@ -1,16 +1,16 @@
-// lib/main.dart
+// main.dart
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
 
-import 'dashboard/bloc/dashboard_bloc.dart';
-import 'dashboard/ui/create_product_page.dart';
-import 'auth/ui/register_page.dart';
-import 'auth/ui/welcome_page.dart';
+import 'auth/auth_layout.dart'; // 👈 AuthLayout, WelcomePage, etc.
 import 'auth/ui/home_page.dart';
 import 'auth/ui/login_page.dart'; // 👈 you created this
-import 'auth/auth_layout.dart'; // 👈 AuthLayout, WelcomePage, etc.
+import 'auth/ui/register_page.dart';
+import 'auth/ui/welcome_page.dart';
+import 'dashboard/bloc/dashboard_bloc.dart';
+import 'dashboard/ui/create_product_page.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

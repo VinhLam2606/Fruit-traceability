@@ -63,7 +63,6 @@ contract Users {
         return userAuths[_userAddress].isRegistered;
     }
 
-    // --- Các hàm cũ cho UserDetails/Organization giữ nguyên ---
     function addUser(Types.UserDetails memory user) public {
         require(user.userID != address(0), "Invalid user address");
         require(users[user.userID].userID == address(0), "User already exists");

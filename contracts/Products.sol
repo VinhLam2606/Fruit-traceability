@@ -39,11 +39,11 @@ contract Products is Users {
     }
 
     // --- CORE ---
+    // THAY ĐỔI: Cập nhật chữ ký hàm để nhận một tham số 'date_'
     function addAProduct(
         string memory batchId,
         string memory name_,
-        uint256 harvestDate_,
-        uint256 expiryDate_
+        uint256 date_
     ) public onlyOrganizationManufacturer {
         if (bytes(batchId).length == 0) revert BatchNotExist();
         if (batchIdExists[batchId]) revert BatchExists();
@@ -55,13 +55,13 @@ contract Products is Users {
         string memory orgName = organizations[orgOwner].organizationName;
         if (bytes(orgName).length == 0) revert NotInOrg();
 
+        // THAY ĐỔI: Cập nhật việc khởi tạo Product
         Types.Product memory p = Types.Product({
             batchId: batchId,
             name: name_,
             organizationName: orgName,
             creator: msg.sender,
-            harvestDate: harvestDate_,
-            expiryDate: expiryDate_,
+            date: date_, // Sử dụng trường 'date' mới
             currentOwner: msg.sender
         });
 
@@ -107,6 +107,8 @@ contract Products is Users {
     }
 
     // --- VIEW ---
+    // Các hàm view không cần thay đổi vì chúng trả về toàn bộ struct,
+    // và struct đã được cập nhật trong Types.sol
     function getProduct(string memory batchId) public view returns (Types.Product memory) {
         if (!batchIdExists[batchId]) revert BatchNotExist();
         return products[productIndexByBatchId[batchId]];
@@ -128,7 +130,6 @@ contract Products is Users {
         return res;
     }
 
-    // --- NEW: Get products by organization name ---
     function getProductsByOrg(string memory orgName) public view returns (Types.Product[] memory) {
         uint count = 0;
         for (uint i = 0; i < products.length; i++) {
