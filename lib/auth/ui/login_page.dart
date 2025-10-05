@@ -1,13 +1,17 @@
+// lib/auth/ui/login_page.dart
 // ignore_for_file: avoid_print, use_build_context_synchronously
-
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:http/http.dart' as http;
 import 'package:untitled/auth/service/auth_service.dart';
+import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
+import 'package:web3dart/web3dart.dart';
+
+import '../../navigation/main_navigation.dart';
 
 class LoginPage extends StatefulWidget {
-  final Function()? onTap; // Add this for toggling
+  final Function()? onTap;
   const LoginPage({super.key, this.onTap});
 
   @override
@@ -29,65 +33,50 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  /// 🔓 Decrypt private key with password
-  String _decryptPrivateKey(String encryptedKey, String password) {
-    final key = encrypt.Key.fromUtf8(
-      password.padRight(32, '0').substring(0, 32),
-    );
-    final iv = encrypt.IV.fromUtf8(
-      "1234567890123456",
-    ); // Must match the IV in RegisterPage
-    final encrypter = encrypt.Encrypter(
-      encrypt.AES(key, mode: encrypt.AESMode.cbc),
-    );
-
-    final decrypted = encrypter.decrypt64(encryptedKey, iv: iv);
-    print("🔓 Decrypted private key successfully");
-    return decrypted;
-  }
-
   Future<void> login() async {
     if (!_formKey.currentState!.validate() || _isLoading) return;
 
     setState(() => _isLoading = true);
 
     try {
-      // ✅ Firebase login
+      // ✅ Login qua AuthService (Firebase + Firestore + SecureStorage)
       final userCred = await authService.value.signIn(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
 
-      // ✅ Get wallet info from Firestore to verify decryption
-      final doc = await FirebaseFirestore.instance
-          .collection("users")
-          .doc(userCred.user!.uid)
-          .get();
-
-      if (!doc.exists) {
-        throw Exception("User data not found in Firestore.");
-      }
-
-      final encryptedKey = doc["privateKeyEnc"];
-
-      // This step implicitly verifies the password is correct.
-      // If it's wrong, this will throw an exception.
-      _decryptPrivateKey(encryptedKey, passwordController.text.trim());
-
       print("➡ Login success for: ${userCred.user!.email}");
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("✅ Welcome back!")));
 
-      // No need to navigate here. The AuthLayout will detect the
-      // auth state change and automatically navigate to the dashboard.
+      // Chuẩn bị web3 client + credentials từ authService
+      final client = Web3Client("http://10.0.2.2:7545", http.Client());
+      final credentials = EthPrivateKey.fromHex(
+        authService.value.decryptedPrivateKey!,
+      );
+
+      // Push vào MainNavigation với DashboardBloc (cung cấp credentials)
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BlocProvider(
+            create: (_) =>
+                DashboardBloc(web3client: client, credentials: credentials)
+                  ..add(DashboardInitialFetchEvent()),
+            child: const MainNavigationPage(),
+          ),
+        ),
+      );
     } catch (e) {
       setState(() {
         errorMessage = e.toString();
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("❌ Login failed: Invalid email or password.")),
-      );
+      print("⚠️ Login error: $e");
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("❌ Login failed: $errorMessage")));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -172,6 +161,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 24),
+
                   // Toggle to Register Page
                   RichText(
                     text: TextSpan(

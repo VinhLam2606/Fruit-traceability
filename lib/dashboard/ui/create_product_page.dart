@@ -1,8 +1,9 @@
 import 'dart:math';
+
+import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:barcode_widget/barcode_widget.dart';
 import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
 import 'package:untitled/dashboard/model/product.dart';
 
@@ -11,10 +12,8 @@ class CreateProductPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => DashboardBloc()..add(DashboardInitialFetchEvent()),
-      child: const CreateProductView(),
-    );
+    // ❌ KHÔNG tạo DashboardBloc mới ở đây nữa
+    return const CreateProductView();
   }
 }
 
@@ -70,10 +69,7 @@ class _CreateProductViewState extends State<CreateProductView> {
             context.read<DashboardBloc>().add(FetchProductsEvent());
           } else if (state is DashboardErrorState) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.error),
-                backgroundColor: Colors.red,
-              ),
+              SnackBar(content: Text(state.error), backgroundColor: Colors.red),
             );
           }
         },
@@ -81,8 +77,7 @@ class _CreateProductViewState extends State<CreateProductView> {
           if (state is DashboardInitial && state is! DashboardLoadingState) {
             return const Center(child: Text("Initializing connection..."));
           }
-          if (state is DashboardLoadingState &&
-              state is! ProductsLoadedState) {
+          if (state is DashboardLoadingState && state is! ProductsLoadedState) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -162,55 +157,53 @@ class _CreateProductViewState extends State<CreateProductView> {
           ),
           const SizedBox(height: 16),
           if (state is DashboardLoadingState)
-            const Expanded(
-              child: Center(child: CircularProgressIndicator()),
-            ),
+            const Expanded(child: Center(child: CircularProgressIndicator())),
           if (state is ProductsLoadedState)
             state.products.isEmpty
                 ? const Expanded(
-              child: Center(child: Text("No products found.")),
-            )
+                    child: Center(child: Text("No products found.")),
+                  )
                 : Expanded(
-              child: Scrollbar(
-                controller: _scrollController,
-                thumbVisibility: true, // hiện thanh cuộn
-                child: ListView.builder(
-                  controller: _scrollController,
-                  itemCount: state.products.length,
-                  itemBuilder: (context, index) {
-                    final Product product = state.products[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        title: Text(
-                          product.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Date: ${_formatTimestamp(product.date)}",
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              height: 80,
-                              child: BarcodeWidget(
-                                barcode: Barcode.code128(),
-                                data: product.batchId,
-                                drawText: true,
+                    child: Scrollbar(
+                      controller: _scrollController,
+                      thumbVisibility: true,
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        itemCount: state.products.length,
+                        itemBuilder: (context, index) {
+                          final Product product = state.products[index];
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              title: Text(
+                                product.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Date: ${_formatTimestamp(product.date)}",
+                                  ),
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    height: 80,
+                                    child: BarcodeWidget(
+                                      barcode: Barcode.code128(),
+                                      data: product.batchId,
+                                      drawText: true,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-              ),
-            ),
+                    ),
+                  ),
         ],
       ),
     );

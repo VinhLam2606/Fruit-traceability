@@ -1,10 +1,6 @@
-// ignore_for_file: avoid_print, use_build_context_synchronously
-
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
-import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -14,8 +10,8 @@ import 'package:web3dart/crypto.dart' as crypto;
 import 'package:web3dart/web3dart.dart';
 
 class RegisterPage extends StatefulWidget {
-  final Function()? onTap; // Add this
-  const RegisterPage({super.key, this.onTap}); // And this
+  final Function()? onTap;
+  const RegisterPage({super.key, this.onTap});
 
   @override
   State<RegisterPage> createState() => _RegisterPageState();
@@ -26,18 +22,24 @@ class _RegisterPageState extends State<RegisterPage> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
+  final usernameController = TextEditingController();
 
-  String accountType = "user"; // default
+  String accountType = "user"; // default = Customer
   String errorMessage = '';
   bool _isLoading = false;
 
   late Web3Client ethClient;
   DeployedContract? usersContract;
 
+  // 🔑 Hardcode key Ganache để test
+  static const providedPrivateKey =
+      "0x095a0ab0f17ecc01facdde677f761e6e1f8189498a708081392deac7b691d1c1";
+  static const providedAddress = "0x779a26B133452FB22fFf3F108c11532af1f1CC1a";
+
   @override
   void initState() {
     super.initState();
-    ethClient = Web3Client("http://10.0.2.2:7545", Client()); // Ganache
+    ethClient = Web3Client("http://10.0.2.2:7545", Client()); // Ganache local
     _loadContract();
   }
 
@@ -46,39 +48,25 @@ class _RegisterPageState extends State<RegisterPage> {
     emailController.dispose();
     passwordController.dispose();
     confirmPasswordController.dispose();
+    usernameController.dispose();
     super.dispose();
   }
 
-  /// 🔐 Encrypt private key with password
-  String _encryptPrivateKey(String privateKey, String password) {
-    final key = encrypt.Key.fromUtf8(
-      password.padRight(32, '0').substring(0, 32),
-    );
-    final iv = encrypt.IV.fromUtf8("1234567890123456"); // fixed IV
-    final encrypter = encrypt.Encrypter(
-      encrypt.AES(key, mode: encrypt.AESMode.cbc),
-    );
-
-    final encrypted = encrypter.encrypt(privateKey, iv: iv);
-    return encrypted.base64;
-  }
-
-  /// Load ABI + address from build/contracts/Chain.json
   Future<void> _loadContract() async {
     try {
       final abiJson = jsonDecode(
-        await rootBundle.loadString("build/contracts/Users.json"),
+        await rootBundle.loadString("build/contracts/Chain.json"),
       );
       final abi = jsonEncode(abiJson["abi"]);
-      const networkId = "5777";
+      const networkId = "5777"; // Ganache default
       final contractAddr = EthereumAddress.fromHex(
         abiJson["networks"][networkId]["address"],
       );
       usersContract = DeployedContract(
-        ContractAbi.fromJson(abi, "Users"),
+        ContractAbi.fromJson(abi, "Chain"), // 👈 tên contract là Chain
         contractAddr,
       );
-      print("✅ Users contract loaded at $contractAddr");
+      print("✅ Chain contract loaded at $contractAddr");
     } catch (e) {
       print("⚠️ Failed to load contract: $e");
     }
@@ -88,98 +76,147 @@ class _RegisterPageState extends State<RegisterPage> {
     try {
       await ethClient.getNetworkId();
       return true;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
-  /// Call registerUser in contract
-  Future<void> _registerOnBlockchain(
+  Future<String> _registerOnBlockchain(
     String username,
     String email,
-    String walletAddr,
+    EthPrivateKey senderKey,
   ) async {
     if (usersContract == null) throw Exception("Contract not loaded");
 
     final registerFn = usersContract!.function("registerUser");
-    final adminKey = EthPrivateKey.fromHex(
-      "0xb5ae0178b193c626861663e32cef47f0c67871ea80c655ac727a642a070f45e6",
-    ); // Ganache acc[0]
 
-    await ethClient.sendTransaction(
-      adminKey,
+    final txHash = await ethClient.sendTransaction(
+      senderKey,
       Transaction.callContract(
         contract: usersContract!,
         function: registerFn,
-        parameters: [EthereumAddress.fromHex(walletAddr), username, email],
-        gasPrice: EtherAmount.inWei(BigInt.from(20000000000)),
-        maxGas: 6000000,
+        parameters: [username, email],
       ),
       chainId: 1337,
     );
+
+    print("👤 Blockchain: registerUser txHash=$txHash");
+    return txHash;
+  }
+
+  Future<String> _addOrganization(
+    String orgName,
+    EthPrivateKey senderKey,
+  ) async {
+    if (usersContract == null) throw Exception("Contract not loaded");
+
+    final fn = usersContract!.function("addOrganization");
+
+    final txHash = await ethClient.sendTransaction(
+      senderKey,
+      Transaction.callContract(
+        contract: usersContract!,
+        function: fn,
+        parameters: [
+          orgName,
+          BigInt.from(
+            DateTime.now().millisecondsSinceEpoch,
+          ), // ✅ sửa thành BigInt
+        ],
+      ),
+      chainId: 1337,
+    );
+
+    print("🏢 Blockchain: addOrganization txHash=$txHash");
+    return txHash;
+  }
+
+  Future<void> _waitForTx(String txHash) async {
+    print("⏳ Đang chờ tx $txHash được mined...");
+    while (true) {
+      final receipt = await ethClient.getTransactionReceipt(txHash);
+      if (receipt != null) {
+        print("✅ Tx mined: $txHash");
+        break;
+      }
+      await Future.delayed(const Duration(seconds: 2));
+    }
   }
 
   void register() async {
     if (!_formKey.currentState!.validate() || _isLoading) return;
-
     setState(() => _isLoading = true);
+
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+    final username = usernameController.text.trim();
 
     try {
       if (!await _isBlockchainAvailable()) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("⚠️ Ganache/Truffle not running")),
-        );
-        setState(() => _isLoading = false);
-        return;
+        throw Exception("Không thể kết nối đến Ganache.");
       }
 
-      final credentials = EthPrivateKey.createRandom(Random.secure());
-      final walletAddress = credentials.address.hex;
-      final privateKey = crypto.bytesToHex(
-        credentials.privateKey,
-        include0x: true,
-      );
-      final encryptedKey = _encryptPrivateKey(
-        privateKey,
-        passwordController.text.trim(),
-      );
+      final credentials = EthPrivateKey.fromHex(providedPrivateKey);
+      final walletAddress = EthereumAddress.fromHex(providedAddress);
 
-      await _registerOnBlockchain(
-        emailController.text.trim().split('@')[0],
-        emailController.text.trim(),
-        walletAddress,
-      );
+      print("🔎 Bắt đầu đăng ký cho $username ($accountType)...");
 
+      // 1. Đăng ký user trên Blockchain (mặc định Customer)
+      final regTx = await _registerOnBlockchain(username, email, credentials);
+      await _waitForTx(regTx);
+
+      String roleToSave = "Customer";
+
+      // 2. Nếu là Organization thì gọi thêm addOrganization để nâng role
+      if (accountType == "organization") {
+        final orgTx = await _addOrganization("${username}_org", credentials);
+        await _waitForTx(orgTx);
+        print("✅ Đã tạo tổ chức cho $username (role=Manufacturer)");
+        roleToSave = "Manufacturer";
+      } else {
+        print("✅ Đăng ký User thường (role=Customer): $username");
+      }
+
+      // 3. Đăng ký Firebase Auth
       final userCred = await authService.value.createAccount(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
+        email: email,
+        password: password,
       );
 
+      // 4. Lưu Firestore với role chuẩn xác
       await FirebaseFirestore.instance
           .collection("users")
           .doc(userCred.user!.uid)
           .set({
-            "email": emailController.text.trim(),
-            "accountType": accountType,
-            "walletAddress": walletAddress,
-            "privateKeyEnc": encryptedKey,
+            "username": username,
+            "email": email,
+            "role": roleToSave,
+            "accountType": accountType, // 🔑 Lưu đúng role
+            "eth_address": walletAddress.hex,
+            "private_key": crypto.bytesToHex(
+              credentials.privateKey,
+              include0x: true,
+            ),
             "createdAt": FieldValue.serverTimestamp(),
           });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("✅ Registered successfully")),
-      );
+      print("🎉 Đăng ký thành công (role=$roleToSave)");
 
-      // No need to navigate here, AuthLayout will handle it automatically
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("✅ Đăng ký $roleToSave thành công!")),
+        );
+      }
     } catch (e) {
       setState(() => errorMessage = e.toString());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("❌ Registration failed: $errorMessage")),
-      );
-    } finally {
+      print("❌ Lỗi đăng ký: $errorMessage");
       if (mounted) {
-        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("❌ Lỗi đăng ký: $errorMessage")));
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -213,14 +250,22 @@ class _RegisterPageState extends State<RegisterPage> {
                     items: const [
                       DropdownMenuItem(
                         value: "user",
-                        child: Text("Normal User"),
+                        child: Text("Normal User (Customer)"),
                       ),
                       DropdownMenuItem(
                         value: "organization",
-                        child: Text("Organization"),
+                        child: Text("Organization (Manufacturer)"),
                       ),
                     ],
                     onChanged: (value) => setState(() => accountType = value!),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: usernameController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _inputDecoration("Username"),
+                    validator: (v) =>
+                        v == null || v.isEmpty ? "Enter username" : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -249,8 +294,9 @@ class _RegisterPageState extends State<RegisterPage> {
                     style: const TextStyle(color: Colors.white),
                     decoration: _inputDecoration("Confirm Password"),
                     validator: (v) {
-                      if (v != passwordController.text)
+                      if (v != passwordController.text) {
                         return "Passwords do not match";
+                      }
                       return null;
                     },
                   ),
@@ -283,7 +329,6 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  // --- MODIFICATION START ---
                   RichText(
                     text: TextSpan(
                       text: "Already have an account? ",
@@ -302,7 +347,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       ],
                     ),
                   ),
-                  // --- MODIFICATION END ---
                   const SizedBox(height: 24),
                 ],
               ),
