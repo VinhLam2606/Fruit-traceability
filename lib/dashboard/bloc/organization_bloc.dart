@@ -3,10 +3,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
-import 'package:bloc/bloc.dart'; // ✅ Sửa lỗi import
+import 'package:bloc/bloc.dart';
 import 'package:flutter/services.dart';
 import 'package:web3dart/web3dart.dart';
 
+import '../../../auth/service/auth_service.dart'; // ✅ thêm dòng này để gọi AuthService
 import '../model/organization.dart';
 
 part 'organization_event.dart';
@@ -29,6 +30,7 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     : super(OrganizationInitial()) {
     on<FetchOrganizationDetails>(_onFetchDetails);
     on<AddMemberToOrganization>(_onAddMember);
+    on<AddMemberByEmail>(_onAddMemberByEmail); // ✅ mới thêm
     on<RemoveMemberFromOrganization>(_onRemoveMember);
   }
 
@@ -65,8 +67,9 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     _getUserFunction = deployedContract.function('getUser');
     _isRegisteredFunction = deployedContract.function('isRegisteredAuth');
     _getOrganizationFunction = deployedContract.function('getOrganization');
-    // Chức năng này không có trong Users.sol, bạn cần thêm vào nếu muốn sử dụng
-    // _addMemberFunction = deployedContract.function('addAssociateToOrganization');
+    _addMemberFunction = deployedContract.function(
+      'addAssociateToOrganization',
+    ); // ✅ nhớ có trong Users.sol
 
     _isContractLoaded = true;
   }
@@ -95,16 +98,11 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     }
 
     final userStruct = userData.first as List<dynamic>;
-
-    // Dựa trên struct UserDetails trong Types.sol:
     final BigInt role = userStruct[2] as BigInt;
     final bool inOrg = userStruct[3] as bool;
 
-    // Chỉ người có vai trò "Manufacturer" (giá trị 1) và đã ở trong một tổ chức mới được coi là Owner.
     if (role.toInt() != 1 || !inOrg) {
-      throw Exception(
-        "❌ Tài khoản này không phải là chủ sở hữu của một tổ chức.",
-      );
+      throw Exception("❌ Tài khoản này không phải là chủ sở hữu tổ chức.");
     }
 
     developer.log(
@@ -122,7 +120,6 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
       await _initializeContract();
       await _checkIsOrganizationOwner();
 
-      // Gọi hàm getOrganization từ contract
       final result = await web3client.call(
         contract: deployedContract,
         function: _getOrganizationFunction,
@@ -135,8 +132,6 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
       }
 
       final rawOrg = result.first as List<dynamic>;
-
-      // Kiểm tra trường ownerAddress (index 2) để xem có phải địa chỉ rỗng không
       final EthereumAddress ownerAddress = rawOrg[2] as EthereumAddress;
       const zeroAddress = "0x0000000000000000000000000000000000000000";
 
@@ -160,42 +155,105 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     }
   }
 
-  /// Xử lý sự kiện thêm thành viên mới
+  /// Xử lý sự kiện thêm thành viên mới (qua địa chỉ ví)
   Future<void> _onAddMember(
     AddMemberToOrganization event,
     Emitter<OrganizationState> emit,
   ) async {
-    emit(
-      OrganizationError(
-        "⚠️ Chức năng thêm thành viên chưa được triển khai trên Smart Contract.",
-      ),
-    );
-    // try {
-    //   await _initializeContract();
-    //   await _checkIsOrganizationOwner();
+    emit(OrganizationLoading());
+    try {
+      await _initializeContract();
+      await _checkIsOrganizationOwner();
 
-    //   final memberAddr = EthereumAddress.fromHex(event.memberAddress);
+      final memberAddr = EthereumAddress.fromHex(event.memberAddress);
 
-    //   final txHash = await web3client.sendTransaction(
-    //     credentials,
-    //     Transaction.callContract(
-    //       contract: deployedContract,
-    //       function: _addMemberFunction,
-    //       parameters: [memberAddr],
-    //     ),
-    //     chainId: 1337,
-    //   );
+      final isRegisteredResult = await web3client.call(
+        contract: deployedContract,
+        function: _isRegisteredFunction,
+        params: [memberAddr],
+      );
 
-    //   developer.log("✅ [OrgBloc] Giao dịch thêm thành viên đã được gửi: tx=$txHash");
-    //   emit(OrganizationActionSuccess("Yêu cầu thêm thành viên đã được gửi. Vui lòng chờ xác nhận."));
+      if (isRegisteredResult.isEmpty || !(isRegisteredResult.first as bool)) {
+        emit(OrganizationError("❌ Thành viên này chưa đăng ký tài khoản."));
+        return;
+      }
 
-    //   await Future.delayed(const Duration(seconds: 2));
-    //   add(FetchOrganizationDetails());
+      final userData = await web3client.call(
+        contract: deployedContract,
+        function: _getUserFunction,
+        params: [memberAddr],
+      );
 
-    // } catch (e) {
-    //   developer.log("❌ [OrgBloc] Lỗi khi thêm thành viên:", error: e);
-    //   emit(OrganizationError("Lỗi khi thêm thành viên: ${e.toString()}"));
-    // }
+      if (userData.isEmpty) {
+        emit(OrganizationError("❌ Không tìm thấy dữ liệu người dùng này."));
+        return;
+      }
+
+      final userStruct = userData.first as List<dynamic>;
+      final bool alreadyInOrg = userStruct[3] as bool;
+
+      if (alreadyInOrg) {
+        emit(
+          OrganizationError("⚠️ Thành viên này đã thuộc về một tổ chức khác."),
+        );
+        return;
+      }
+
+      final txHash = await web3client.sendTransaction(
+        credentials,
+        Transaction.callContract(
+          contract: deployedContract,
+          function: _addMemberFunction,
+          parameters: [memberAddr],
+        ),
+        chainId: 1337,
+      );
+
+      developer.log("✅ [OrgBloc] Giao dịch thêm thành viên đã gửi: $txHash");
+      emit(OrganizationActionSuccess("✅ Đã gửi yêu cầu thêm thành viên."));
+      await Future.delayed(const Duration(seconds: 3));
+      add(FetchOrganizationDetails());
+    } catch (e) {
+      developer.log("❌ [OrgBloc] Lỗi khi thêm thành viên:", error: e);
+      emit(OrganizationError("Lỗi khi thêm thành viên: ${e.toString()}"));
+    }
+  }
+
+  /// ✅ Xử lý sự kiện thêm thành viên qua email
+  Future<void> _onAddMemberByEmail(
+    AddMemberByEmail event,
+    Emitter<OrganizationState> emit,
+  ) async {
+    emit(OrganizationLoading());
+    try {
+      final auth = authService.value;
+      final targetUser = await auth.getUserWalletByEmail(event.email);
+
+      if (targetUser == null) {
+        emit(
+          OrganizationError("❌ Không tìm thấy user với email: ${event.email}"),
+        );
+        return;
+      }
+
+      final memberAddress = targetUser['eth_address']!;
+      final username = targetUser['username'];
+      developer.log(
+        "📬 [OrgBloc] Chuẩn bị thêm user $username ($memberAddress) vào tổ chức",
+      );
+
+      add(AddMemberToOrganization(memberAddress));
+    } catch (e) {
+      developer.log(
+        "❌ [OrgBloc] Lỗi khi thêm thành viên bằng email:",
+        error: e,
+      );
+      emit(
+        OrganizationError(
+          "Lỗi khi thêm thành viên bằng email: ${e.toString()}",
+        ),
+      );
+    }
   }
 
   /// Xử lý sự kiện xóa thành viên

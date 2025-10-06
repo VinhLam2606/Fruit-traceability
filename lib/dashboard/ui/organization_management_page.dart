@@ -1,4 +1,3 @@
-// dashboard/ui/organization_management_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:untitled/dashboard/bloc/organization_bloc.dart';
@@ -10,7 +9,6 @@ class OrganizationManagementPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // TRANSLATION: Changed AppBar title.
       appBar: AppBar(title: const Text("Organization Management")),
       body: BlocConsumer<OrganizationBloc, OrganizationState>(
         listener: (context, state) {
@@ -21,24 +19,63 @@ class OrganizationManagementPage extends StatelessWidget {
                 backgroundColor: Colors.green,
               ),
             );
-            context.read<OrganizationBloc>().add(FetchOrganizationDetails());
-          } else if (state is OrganizationError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.error), backgroundColor: Colors.red),
+          }
+          // ✅ Hiển thị dialog lỗi nhẹ, KHÔNG mất trang
+          else if (state is OrganizationError) {
+            showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: const Text("Error"),
+                content: Text(state.error),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      // 🔹 Load lại dữ liệu (nếu cần)
+                      context.read<OrganizationBloc>().add(
+                        FetchOrganizationDetails(),
+                      );
+                    },
+                    child: const Text("OK"),
+                  ),
+                ],
+              ),
             );
           }
         },
         builder: (context, state) {
+          // 🔹 Nếu đang loading
           if (state is OrganizationLoading) {
             return const Center(child: CircularProgressIndicator());
           }
+
+          // 🔹 Nếu đã load được tổ chức
           if (state is OrganizationLoaded) {
             return _buildLoadedView(context, state);
           }
-          if (state is OrganizationError) {
-            return Center(child: Text(state.error));
+
+          // 🔹 Nếu có lỗi trong lần đầu load (chưa có org nào)
+          if (state is OrganizationError &&
+              state is! OrganizationActionSuccess) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(state.error, textAlign: TextAlign.center),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () {
+                      context.read<OrganizationBloc>().add(
+                        FetchOrganizationDetails(),
+                      );
+                    },
+                    child: const Text("Thử lại"),
+                  ),
+                ],
+              ),
+            );
           }
-          // TRANSLATION: Changed initial text.
+
           return const Center(child: Text("Initializing..."));
         },
       ),
@@ -81,7 +118,6 @@ class OrganizationManagementPage extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              // TRANSLATION: Changed section title.
               "Members (${members.length})",
               style: Theme.of(context).textTheme.headlineSmall,
             ),
@@ -93,7 +129,6 @@ class OrganizationManagementPage extends StatelessWidget {
         ),
         const Divider(),
         members.isEmpty
-            // TRANSLATION: Changed empty state text.
             ? const Text("No members found.")
             : ListView.builder(
                 shrinkWrap: true,
@@ -133,39 +168,53 @@ class OrganizationManagementPage extends StatelessWidget {
     );
   }
 
+  /// 🔹 Thêm thành viên chỉ bằng Email
   void _showAddMemberDialog(BuildContext context) {
-    final TextEditingController addressController = TextEditingController();
+    final TextEditingController emailController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          // TRANSLATION: Changed dialog title.
-          title: const Text("Add New Member"),
+          title: const Text("Add New Member by Email"),
           content: TextField(
-            controller: addressController,
+            controller: emailController,
+            keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(
-              // TRANSLATION: Changed text field labels.
-              labelText: "Member's Wallet Address",
-              hintText: "0x...",
+              labelText: "Member's Email",
+              hintText: "example@email.com",
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              // TRANSLATION: Changed button text.
               child: const Text("Cancel"),
             ),
             ElevatedButton(
               onPressed: () {
-                final address = addressController.text.trim();
-                if (address.isNotEmpty) {
-                  context.read<OrganizationBloc>().add(
-                    AddMemberToOrganization(address),
+                final email = emailController.text.trim();
+                if (email.isEmpty || !email.contains('@')) {
+                  showDialog(
+                    context: dialogContext,
+                    builder: (_) => AlertDialog(
+                      title: const Text("Invalid Email"),
+                      content: const Text(
+                        "Please enter a valid email address.",
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext),
+                          child: const Text("OK"),
+                        ),
+                      ],
+                    ),
                   );
-                  Navigator.pop(dialogContext);
+                  return;
                 }
+
+                context.read<OrganizationBloc>().add(AddMemberByEmail(email));
+                Navigator.pop(dialogContext);
               },
-              // TRANSLATION: Changed button text.
               child: const Text("Add"),
             ),
           ],

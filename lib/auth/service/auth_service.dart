@@ -173,6 +173,47 @@ class AuthService extends ChangeNotifier {
     );
   }
 
+  Future<Map<String, String>?> getUserWalletByEmail(String email) async {
+    try {
+      debugPrint("🔎 [AuthService] Đang tìm user theo email: $email");
+
+      // Firestore không thể query trực tiếp bằng docId (vì docId là UID)
+      // nên ta phải query theo trường email trong collection 'users'
+      final querySnapshot = await _firestore
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        debugPrint("⚠️ [AuthService] Không tìm thấy user với email: $email");
+        return null;
+      }
+
+      final userDoc = querySnapshot.docs.first.data();
+
+      final privateKey = userDoc['private_key'] as String?;
+      final walletAddr = userDoc['eth_address'] as String?;
+      final username = userDoc['username'] as String?;
+
+      if (privateKey == null || walletAddr == null) {
+        debugPrint("❌ [AuthService] User thiếu private_key hoặc eth_address");
+        return null;
+      }
+
+      debugPrint("✅ [AuthService] Tìm thấy user: $username ($walletAddr)");
+
+      return {
+        'private_key': privateKey,
+        'eth_address': walletAddr,
+        'username': username ?? '',
+      };
+    } catch (e) {
+      debugPrint("❌ [AuthService] Lỗi khi lấy user theo email: $e");
+      return null;
+    }
+  }
+
   Future<void> signOut() async {
     debugPrint("🚪 [SignOut] Đăng xuất");
     await _firebaseAuth.signOut();

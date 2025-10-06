@@ -17,3 +17,8 @@ class RemoveMemberFromOrganization extends OrganizationEvent {
   final String memberAddress;
   RemoveMemberFromOrganization(this.memberAddress);
 }
+
+class AddMemberByEmail extends OrganizationEvent {
+  final String email;
+  AddMemberByEmail(this.email);
+}

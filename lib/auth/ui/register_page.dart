@@ -33,8 +33,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
   // 🔑 Hardcode key Ganache để test
   static const providedPrivateKey =
-      "0x095a0ab0f17ecc01facdde677f761e6e1f8189498a708081392deac7b691d1c1";
-  static const providedAddress = "0x779a26B133452FB22fFf3F108c11532af1f1CC1a";
+      "0x19068590c554fbfb02d4a9095ee7f4ca6e3ccbe6c9984964efd1d576553c0f0c";
+  static const providedAddress = "0xAF51F6558D90F738366296E2a8fc20fFf854B6cf";
 
   @override
   void initState() {

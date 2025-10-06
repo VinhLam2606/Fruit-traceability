@@ -91,4 +91,22 @@ contract Users {
     function isRegisteredAuth(address account) public view returns (bool) {
         return userAuths[account].isRegistered;
     }
+    function addAssociateToOrganization(address associate) public onlyRegisteredUser {
+        // Đảm bảo caller là chủ tổ chức
+        require(users[msg.sender].role == Types.UserRole.Manufacturer, "Caller is not an organization owner");
+        require(users[associate].isAlreadyInAnyOrganization == false, "User already in an organization");
+        require(userAuths[associate].isRegistered, "User not registered");
+
+        // Lấy tổ chức của chủ sở hữu
+        Types.Organization storage org = organizations[msg.sender];
+
+        // Cập nhật trạng thái user
+        users[associate].isAlreadyInAnyOrganization = true;
+
+        // Thêm vào danh sách thành viên tổ chức
+        org.organizationMembers.push(users[associate]);
+        memberToOrganizationOwner[associate] = msg.sender;
+
+        emit AssociateAdded(msg.sender, associate, users[associate].userName);
+    }
 }
