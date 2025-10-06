@@ -6,6 +6,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:untitled/auth/service/auth_service.dart';
 import 'package:untitled/dashboard/bloc/account_bloc.dart';
 
+import '../../auth/auth_layout.dart';
+
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
 
@@ -32,9 +34,18 @@ class _AccountPageState extends State<AccountPage> {
             tooltip: "Đăng xuất",
             onPressed: () async {
               await authService.value.signOut();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("✅ Đã đăng xuất thành công")),
-              );
+
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("✅ Đã đăng xuất thành công")),
+                );
+
+                // 👉 Quay lại màn hình gốc (AuthLayout)
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const AuthLayout()),
+                  (route) => false, // Xóa toàn bộ history
+                );
+              }
             },
           ),
         ],
