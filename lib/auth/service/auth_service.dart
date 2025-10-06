@@ -177,8 +177,6 @@ class AuthService extends ChangeNotifier {
     try {
       debugPrint("🔎 [AuthService] Đang tìm user theo email: $email");
 
-      // Firestore không thể query trực tiếp bằng docId (vì docId là UID)
-      // nên ta phải query theo trường email trong collection 'users'
       final querySnapshot = await _firestore
           .collection('users')
           .where('email', isEqualTo: email)
@@ -214,9 +212,17 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  /// ✅ Fixed signOut() - no widget return
   Future<void> signOut() async {
     debugPrint("🚪 [SignOut] Đăng xuất");
     await _firebaseAuth.signOut();
+    await _secureStorage.deleteAll();
+    decryptedPrivateKey = null;
+    walletAddress = null;
+    username = null;
+    accountType = null;
+    authService.value = this;
+    notifyListeners();
   }
 
   // ✅ Setter userData để gán toàn bộ dữ liệu từ Firestore hoặc blockchain

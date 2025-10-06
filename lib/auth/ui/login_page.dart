@@ -1,14 +1,10 @@
-// lib/auth/ui/login_page.dart
 // ignore_for_file: avoid_print, use_build_context_synchronously
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:http/http.dart' as http;
 import 'package:untitled/auth/service/auth_service.dart';
-import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
-import 'package:web3dart/web3dart.dart';
 
-import '../../navigation/main_navigation.dart';
+import '../auth_layout.dart'; // 🔥 import để điều hướng về AuthLayout
 
 class LoginPage extends StatefulWidget {
   final Function()? onTap;
@@ -35,7 +31,6 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> login() async {
     if (!_formKey.currentState!.validate() || _isLoading) return;
-
     setState(() => _isLoading = true);
 
     try {
@@ -51,36 +46,20 @@ class _LoginPageState extends State<LoginPage> {
         context,
       ).showSnackBar(const SnackBar(content: Text("✅ Welcome back!")));
 
-      // Chuẩn bị web3 client + credentials từ authService
-      final client = Web3Client("http://10.0.2.2:7545", http.Client());
-      final credentials = EthPrivateKey.fromHex(
-        authService.value.decryptedPrivateKey!,
-      );
-
-      // Push vào MainNavigation với DashboardBloc (cung cấp credentials)
-      Navigator.pushReplacement(
+      // 🔥 Sau khi login, điều hướng về AuthLayout
+      Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (_) => BlocProvider(
-            create: (_) =>
-                DashboardBloc(web3client: client, credentials: credentials)
-                  ..add(DashboardInitialFetchEvent()),
-            child: const MainNavigationPage(),
-          ),
-        ),
+        MaterialPageRoute(builder: (_) => const AuthLayout()),
+        (route) => false,
       );
     } catch (e) {
-      setState(() {
-        errorMessage = e.toString();
-      });
+      setState(() => errorMessage = e.toString());
       print("⚠️ Login error: $e");
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("❌ Login failed: $errorMessage")));
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -198,10 +177,6 @@ class _LoginPageState extends State<LoginPage> {
       filled: true,
       fillColor: Colors.black45,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: BorderSide.none,
       ),
