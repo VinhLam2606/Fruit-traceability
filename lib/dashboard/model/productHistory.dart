@@ -1,3 +1,5 @@
+// ignore_for_file: file_names
+
 import 'package:web3dart/web3dart.dart';
 
 class ProductHistory {

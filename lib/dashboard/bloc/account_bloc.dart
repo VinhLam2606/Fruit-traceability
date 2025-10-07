@@ -77,8 +77,16 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
         "accountType=${authService.value.accountType}",
       );
 
+      final displayName = (name.isNotEmpty)
+          ? name
+          : (authService.value.username ?? "Unknown User");
+
       emit(
-        AccountLoaded(userName: name, userAddress: userAddr.hex, role: role),
+        AccountLoaded(
+          userName: displayName,
+          userAddress: userAddr.hex,
+          role: role,
+        ),
       );
     } catch (e, st) {
       developer.log("❌ Error loading account: $e", stackTrace: st);
