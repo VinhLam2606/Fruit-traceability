@@ -1,9 +1,8 @@
-// ignore_for_file: avoid_print, use_build_context_synchronously
+// ignore_for_file: avoid_print, use_build_context_synchronously, deprecated_member_use
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:untitled/auth/service/auth_service.dart';
-
 import '../auth_layout.dart'; // 🔥 import để điều hướng về AuthLayout
 
 class LoginPage extends StatefulWidget {
@@ -34,7 +33,6 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      // ✅ Login qua AuthService (Firebase + Firestore + SecureStorage)
       final userCred = await authService.value.signIn(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
@@ -46,7 +44,6 @@ class _LoginPageState extends State<LoginPage> {
         context,
       ).showSnackBar(const SnackBar(content: Text("✅ Welcome back!")));
 
-      // 🔥 Sau khi login, điều hướng về AuthLayout
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const AuthLayout()),
@@ -66,102 +63,157 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 40),
-                  const Text(
-                    "Welcome Back",
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF141E30), Color(0xFF243B55)],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 28.0,
+                vertical: 20,
+              ),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.lock_open_rounded,
+                      size: 90,
+                      color: Colors.greenAccent,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    "Login to continue",
-                    style: TextStyle(color: Colors.white54, fontSize: 16),
-                  ),
-                  const SizedBox(height: 40),
-
-                  // Email
-                  TextFormField(
-                    controller: emailController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _inputDecoration("Email"),
-                    validator: (value) => value == null || value.isEmpty
-                        ? "Please enter email"
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Password
-                  TextFormField(
-                    controller: passwordController,
-                    obscureText: true,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _inputDecoration("Password"),
-                    validator: (value) => value == null || value.isEmpty
-                        ? "Please enter password"
-                        : null,
-                  ),
-                  const SizedBox(height: 30),
-
-                  // Login button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.greenAccent,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      "Welcome Back 👋",
+                      style: TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 1.2,
                       ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.black,
-                              ),
-                            )
-                          : const Text("Login", style: TextStyle(fontSize: 16)),
                     ),
-                  ),
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Login to continue your journey",
+                      style: TextStyle(color: Colors.white70, fontSize: 16),
+                    ),
+                    const SizedBox(height: 40),
 
-                  // Toggle to Register Page
-                  RichText(
-                    text: TextSpan(
-                      text: "Don't have an account? ",
-                      style: const TextStyle(color: Colors.white54),
-                      children: [
-                        TextSpan(
-                          text: "Register now",
-                          style: const TextStyle(
-                            color: Colors.blueAccent,
-                            fontWeight: FontWeight.bold,
-                            decoration: TextDecoration.underline,
+                    // Email
+                    TextFormField(
+                      controller: emailController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _inputDecoration("Email"),
+                      validator: (value) => value == null || value.isEmpty
+                          ? "Please enter email"
+                          : null,
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Password
+                    TextFormField(
+                      controller: passwordController,
+                      obscureText: true,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _inputDecoration("Password"),
+                      validator: (value) => value == null || value.isEmpty
+                          ? "Please enter password"
+                          : null,
+                    ),
+                    const SizedBox(height: 35),
+
+                    // Login button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.greenAccent,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
                           ),
-                          recognizer: TapGestureRecognizer()
-                            ..onTap = widget.onTap,
+                          elevation: 10,
+                          shadowColor: Colors.greenAccent.withOpacity(0.5),
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.black,
+                                ),
+                              )
+                            : const Text(
+                                "LOGIN",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 25),
+
+                    // Divider with "OR"
+                    Row(
+                      children: const [
+                        Expanded(
+                          child: Divider(color: Colors.white24, thickness: 1),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            "OR",
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Divider(color: Colors.white24, thickness: 1),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                    const SizedBox(height: 25),
+
+                    // Register text
+                    RichText(
+                      textAlign: TextAlign.center,
+                      text: TextSpan(
+                        text: "Don't have an account? ",
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: "Register now",
+                            style: const TextStyle(
+                              color: Colors.greenAccent,
+                              fontWeight: FontWeight.bold,
+                              decoration: TextDecoration.underline,
+                            ),
+                            recognizer: TapGestureRecognizer()
+                              ..onTap = widget.onTap,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+                  ],
+                ),
               ),
             ),
           ),
@@ -173,16 +225,17 @@ class _LoginPageState extends State<LoginPage> {
   InputDecoration _inputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: Colors.white54),
+      hintStyle: const TextStyle(color: Colors.white70),
       filled: true,
-      fillColor: Colors.black45,
+      fillColor: Colors.white.withOpacity(0.1),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Colors.greenAccent),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.greenAccent, width: 2),
       ),
     );
   }

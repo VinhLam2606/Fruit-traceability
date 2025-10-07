@@ -58,8 +58,9 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
       final abi = ContractAbi.fromJson(jsonEncode(jsonAbi['abi']), 'Chain');
       final networks = jsonAbi['networks'] as Map<String, dynamic>;
-      if (networks.isEmpty)
+      if (networks.isEmpty) {
         throw Exception("❌ Không tìm thấy network nào trong Chain.json.");
+      }
 
       final networkKey = networks.keys.first;
       final contractAddressHex = networks[networkKey]['address'] as String?;
