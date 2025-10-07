@@ -109,4 +109,41 @@ contract Users {
 
         emit AssociateAdded(msg.sender, associate, users[associate].userName);
     }
+    function getOrganizationByMember(address _member) public view returns (Types.Organization memory) {
+        address owner = memberToOrganizationOwner[_member];
+        return organizations[owner];
+    }
+    function leaveOrganization() public onlyRegisteredUser {
+        // Lấy chủ sở hữu của tổ chức mà user đang ở
+        address owner = memberToOrganizationOwner[msg.sender];
+        require(owner != address(0), "You are not in any organization");
+
+        // Không cho phép owner rời tổ chức của chính họ
+        require(owner != msg.sender, "Owner cannot leave their own organization");
+
+        Types.Organization storage org = organizations[owner];
+        uint256 memberCount = org.organizationMembers.length;
+        bool removed = false;
+
+        // Xóa member khỏi danh sách organizationMembers
+        for (uint256 i = 0; i < memberCount; i++) {
+            if (org.organizationMembers[i].userID == msg.sender) {
+                // Gán phần tử cuối cùng vào vị trí bị xoá (swap & pop)
+                org.organizationMembers[i] = org.organizationMembers[memberCount - 1];
+                org.organizationMembers.pop();
+                removed = true;
+                break;
+            }
+        }
+
+        require(removed, "Member not found in organization");
+
+        // Cập nhật trạng thái user
+        users[msg.sender].isAlreadyInAnyOrganization = false;
+        memberToOrganizationOwner[msg.sender] = address(0);
+
+        emit AssociateRemoved(owner, msg.sender, users[msg.sender].userName);
+    }
+
+    event AssociateRemoved(address indexed orgAddr, address indexed userAddr, string userName);
 }
