@@ -30,29 +30,27 @@ contract Users {
     event AssociateAdded(address indexed orgAddr, address indexed userAddr, string userName);
 
     function registerUser(
-        string memory _username,
+        address _userAddress, 
         string memory _email
-    ) public {
-        address _userAddress = msg.sender;
+    ) 
+    public {
         require(!userAuths[_userAddress].isRegistered, "User already registered");
 
         userAuths[_userAddress] = UserAuth({
-            username: _username,
+            username: "",
             email: _email,
             isRegistered: true
         });
 
-        // 👉 Mặc định luôn là Customer
         users[_userAddress] = Types.UserDetails({
             userID: _userAddress,
-            userName: _username,
+            userName: "",
             role: Types.UserRole.Customer,
             isAlreadyInAnyOrganization: false
         });
         userAddresses.push(_userAddress);
 
-        emit UserRegistered(_userAddress, _username, _email, Types.UserRole.Customer);
-        emit UserAdded(_userAddress, _username, Types.UserRole.Customer, block.timestamp);
+        emit UserRegistered(_userAddress, "", _email, Types.UserRole.Customer);
     }
 
     function addOrganization(string memory name_, uint256 establishedDate_) public onlyRegisteredUser {

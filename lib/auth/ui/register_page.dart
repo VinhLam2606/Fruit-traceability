@@ -33,8 +33,8 @@ class _RegisterPageState extends State<RegisterPage> {
   DeployedContract? usersContract;
 
   static const providedPrivateKey =
-      "0xd217188cb300a068ce4639d2845eb0c218639439d49c72a0c993bd124c3681e3";
-  static const providedAddress = "0x4014e07018721C7EE4DBfe6723Ad3720BC0AD564";
+      "0xebd4ba780d7875ea3e168960340f151e00356916d1e90aef4426469d1cdc2620";
+  static const providedAddress = "0x1B40fC3BaBf04Ee400f093D1405944E8fC70c599";
 
   @override
   void initState() {
@@ -85,6 +85,7 @@ class _RegisterPageState extends State<RegisterPage> {
     String username,
     String email,
     EthPrivateKey senderKey,
+    EthereumAddress walletAddress,
   ) async {
     if (usersContract == null) throw Exception("Contract not loaded");
     final registerFn = usersContract!.function("registerUser");
@@ -93,7 +94,7 @@ class _RegisterPageState extends State<RegisterPage> {
       Transaction.callContract(
         contract: usersContract!,
         function: registerFn,
-        parameters: [username, email],
+        parameters: [walletAddress, email],
       ),
       chainId: 1337,
     );
@@ -152,7 +153,12 @@ class _RegisterPageState extends State<RegisterPage> {
       final walletAddress = EthereumAddress.fromHex(providedAddress);
       print("🔎 Registering for $username ($accountType)...");
 
-      final regTx = await _registerOnBlockchain(username, email, credentials);
+      final regTx = await _registerOnBlockchain(
+        username,
+        email,
+        credentials,
+        walletAddress,
+      );
       await _waitForTx(regTx);
 
       String roleToSave = "Customer";
