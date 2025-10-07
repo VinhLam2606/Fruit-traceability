@@ -39,8 +39,6 @@ class _AccountPageState extends State<AccountPage> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("✅ Đã đăng xuất thành công")),
                 );
-
-                // 👉 Quay lại màn hình gốc (AuthLayout)
                 Navigator.of(context).pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const AuthLayout()),
                   (route) => false, // Xóa toàn bộ history
