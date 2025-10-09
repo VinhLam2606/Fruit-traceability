@@ -18,9 +18,10 @@ class Product {
   });
 
   factory Product.fromContract(List<dynamic> contractData) {
-    if (contractData.length < 6) {
-      throw const FormatException("Dữ liệu hợp đồng sản phẩm không hợp lệ");
+    if (contractData.length != 6) {
+      throw FormatException("Dữ liệu hợp đồng sản phẩm không hợp lệ: $contractData");
     }
+
     return Product(
       batchId: contractData[0] as String,
       name: contractData[1] as String,
@@ -30,4 +31,17 @@ class Product {
       currentOwner: (contractData[5] as EthereumAddress).hex,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'batchId': batchId,
+    'name': name,
+    'organizationName': organizationName,
+    'creator': creator,
+    'date': date.toString(),
+    'currentOwner': currentOwner,
+  };
+
+  @override
+  String toString() =>
+      'Product(batchId: $batchId, name: $name, org: $organizationName, creator: $creator, date: $date, owner: $currentOwner)';
 }

@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
 import 'package:untitled/navigation/customer_navigation.dart';
 import 'package:untitled/navigation/main_navigation.dart';
+import 'package:untitled/dashboard/bloc/scan_bloc.dart';
 import 'package:web3dart/web3dart.dart';
 
 import 'service/auth_service.dart';
@@ -23,7 +24,8 @@ class AppLoadingPage extends StatelessWidget {
 class AuthLayout extends StatelessWidget {
   const AuthLayout({super.key});
 
-  Future<DeployedContract> _loadContract(BuildContext context) async {
+  // Đổi tên hàm để rõ ràng hơn, nó tải contract "Chain"
+  Future<DeployedContract> _loadChainContract(BuildContext context) async {
     final abiString = await DefaultAssetBundle.of(
       context,
     ).loadString("build/contracts/Chain.json");
@@ -40,48 +42,48 @@ class AuthLayout extends StatelessWidget {
     return ValueListenableBuilder<AuthService>(
       valueListenable: authService,
       builder: (context, service, _) {
-        // --- 1. Nếu chưa đăng nhập ---
-        if (service.currentUser == null) {
-          return const LoginOrRegisterPage();
-        }
-
-        // --- 2. Nếu chưa load private key hoặc wallet ---
-        if (service.decryptedPrivateKey == null ||
+        if (service.currentUser == null ||
+            service.decryptedPrivateKey == null ||
             service.walletAddress == null) {
           return const LoginOrRegisterPage();
         }
 
-        // --- 3. Nếu đã đăng nhập ---
         final rpcUrl = "http://10.0.2.2:7545";
         final web3client = Web3Client(rpcUrl, http.Client());
         final credentials = EthPrivateKey.fromHex(service.decryptedPrivateKey!);
         final accountType = service.accountType;
 
         if (accountType == "organization") {
-          // 🏢 Tổ chức → DashboardBloc + MainNavigationPage
-          return BlocProvider(
-            create: (_) =>
-                DashboardBloc(web3client: web3client, credentials: credentials)
-                  ..add(DashboardInitialFetchEvent()),
+          // 🏢 Tổ chức → Cung cấp DashboardBloc, MainNavigationPage sẽ cung cấp các BLoC con
+          return BlocProvider<DashboardBloc>(
+            create: (_) => DashboardBloc(
+              web3client: web3client,
+              credentials: credentials,
+            )..add(DashboardInitialFetchEvent()),
             child: const MainNavigationPage(),
           );
         } else if (accountType == "user") {
-          // 👤 Customer → CustomerNavigationPage
-          return FutureBuilder<DeployedContract>(
-            future: _loadContract(context),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const AppLoadingPage();
-              }
-              return CustomerNavigationPage(
-                web3client: web3client,
-                deployedContract: snapshot.data!,
-              );
-            },
+          // 👤 Customer → Cung cấp ScanBloc, sau đó tải contract cho CustomerNavigationPage
+          return BlocProvider<ScanBloc>(
+            create: (_) => ScanBloc(web3client: web3client),
+            child: FutureBuilder<DeployedContract>(
+              future: _loadChainContract(context),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting || !snapshot.hasData) {
+                  return const AppLoadingPage();
+                }
+                if (snapshot.hasError) {
+                  return Scaffold(body: Center(child: Text("Lỗi tải contract: ${snapshot.error}")));
+                }
+                return CustomerNavigationPage(
+                  web3client: web3client,
+                  deployedContract: snapshot.data!,
+                );
+              },
+            ),
           );
         }
 
-        // 🚫 Nếu accountType khác
         return const LoginOrRegisterPage();
       },
     );

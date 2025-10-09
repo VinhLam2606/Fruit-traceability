@@ -1,10 +1,9 @@
-// lib/dashboard/ui/main_navigation.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:untitled/dashboard/bloc/account_bloc.dart';
 import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
 import 'package:untitled/dashboard/bloc/organization_bloc.dart';
+import 'package:untitled/dashboard/bloc/scan_bloc.dart';
 import 'package:untitled/dashboard/ui/account_page.dart';
 import 'package:untitled/dashboard/ui/create_product_page.dart';
 import 'package:untitled/dashboard/ui/home_page.dart';
@@ -31,14 +30,12 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   Widget build(BuildContext context) {
     return BlocBuilder<DashboardBloc, DashboardState>(
       builder: (context, state) {
-        // --- Loading hoặc Initial ---
         if (state is DashboardLoadingState || state is DashboardInitial) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // --- Error ---
         if (state is DashboardErrorState) {
           return Scaffold(
             body: Center(
@@ -54,7 +51,6 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
           );
         }
 
-        // --- Success ---
         if (state is DashboardInitialSuccessState ||
             state is ProductsLoadedState ||
             state is DashboardSuccessState) {
@@ -68,20 +64,23 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
                   deployedContract: dashboardBloc.deployedContract,
                 ),
               ),
-              // ✅ SỬA LỖI TẠI ĐÂY
               BlocProvider<OrganizationBloc>(
                 create: (context) => OrganizationBloc(
                   web3client: dashboardBloc.web3client,
                   credentials: dashboardBloc.credentials,
-                  // Dòng 'deployedContract' đã được xóa bỏ
-                )..add(FetchOrganizationDetails()), // fetch ngay khi khởi tạo
+                )..add(FetchOrganizationDetails()),
+              ),
+              // ScanBloc giờ chỉ cần web3client
+              BlocProvider<ScanBloc>(
+                create: (context) => ScanBloc(
+                  web3client: dashboardBloc.web3client,
+                ),
               ),
             ],
             child: _buildScaffold(),
           );
         }
 
-        // --- Fallback ---
         return const Scaffold(
           body: Center(child: Text("Trạng thái không xác định.")),
         );
