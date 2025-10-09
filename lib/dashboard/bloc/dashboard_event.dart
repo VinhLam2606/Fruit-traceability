@@ -12,12 +12,22 @@ class FetchProductsEvent extends DashboardEvent {}
 class CreateProductButtonPressedEvent extends DashboardEvent {
   final String batchId;
   final String name;
-  final int date; // Gộp hai trường date cũ thành một
+  final int date;
 
   CreateProductButtonPressedEvent({
     required this.batchId,
     required this.name,
-    required this.date, // Cập nhật constructor
+    required this.date,
+  });
+}
+
+class TransferProductEvent extends DashboardEvent {
+  final String batchId;
+  final String receiverOrganizationId; // Tên/ID tổ chức nhận
+
+  TransferProductEvent({
+    required this.batchId,
+    required this.receiverOrganizationId,
   });
 }
 
@@ -26,8 +36,7 @@ class RegisterOrgAndCreateProductEvent extends DashboardEvent {
   final String orgName;
   final String batchId;
   final String name;
-  final int date; // Cũng cần cập nhật ở đây nếu sử dụng
-  // Giả sử chỉ cần cập nhật ở event trên, nhưng để nhất quán thì nên sửa cả ở đây
+  final int date;
 
   RegisterOrgAndCreateProductEvent({
     required this.orgName,

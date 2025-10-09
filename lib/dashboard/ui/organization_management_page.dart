@@ -19,6 +19,9 @@ class OrganizationManagementPage extends StatelessWidget {
                 backgroundColor: Colors.green,
               ),
             );
+            // 🟢 SỬA LỖI REFRESH TẠI ĐÂY: Kích hoạt fetch ngay sau khi hành động thành công
+            // Điều này buộc Bloc phải chạy lại _onFetchDetails và emit OrganizationLoaded mới
+            context.read<OrganizationBloc>().add(FetchOrganizationDetails());
           }
           // ✅ Hiển thị dialog lỗi nhẹ, KHÔNG mất trang
           else if (state is OrganizationError) {
@@ -31,10 +34,12 @@ class OrganizationManagementPage extends StatelessWidget {
                   TextButton(
                     onPressed: () {
                       Navigator.pop(context);
-                      // 🔹 Load lại dữ liệu (nếu cần)
-                      context.read<OrganizationBloc>().add(
-                        FetchOrganizationDetails(),
-                      );
+                      // Tải lại dữ liệu chỉ trong trường hợp lỗi xảy ra khi trạng thái chưa được load
+                      if (state is! OrganizationLoaded) {
+                        context.read<OrganizationBloc>().add(
+                          FetchOrganizationDetails(),
+                        );
+                      }
                     },
                     child: const Text("OK"),
                   ),
@@ -54,9 +59,8 @@ class OrganizationManagementPage extends StatelessWidget {
             return _buildLoadedView(context, state);
           }
 
-          // 🔹 Nếu có lỗi trong lần đầu load (chưa có org nào)
-          if (state is OrganizationError &&
-              state is! OrganizationActionSuccess) {
+          // 🔹 Nếu có lỗi trong lần đầu load
+          if (state is OrganizationError) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -194,26 +198,21 @@ class OrganizationManagementPage extends StatelessWidget {
               onPressed: () {
                 final email = emailController.text.trim();
                 if (email.isEmpty || !email.contains('@')) {
-                  showDialog(
-                    context: dialogContext,
-                    builder: (_) => AlertDialog(
-                      title: const Text("Invalid Email"),
-                      content: const Text(
-                        "Please enter a valid email address.",
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(dialogContext),
-                          child: const Text("OK"),
-                        ),
-                      ],
+                  // ⚠️ Hiển thị SnackBar lỗi
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Please enter a valid email address."),
+                      backgroundColor: Colors.red,
                     ),
                   );
+                  // Đóng dialog để người dùng có thể thử lại
+                  Navigator.pop(dialogContext);
                   return;
                 }
 
+                // Gửi sự kiện thêm thành viên
                 context.read<OrganizationBloc>().add(AddMemberByEmail(email));
-                Navigator.pop(dialogContext);
+                Navigator.pop(dialogContext); // Đóng dialog
               },
               child: const Text("Add"),
             ),

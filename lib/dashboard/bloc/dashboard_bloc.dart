@@ -24,11 +24,17 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   late ContractFunction _isRegisteredFunction;
   late ContractFunction _getUserFunction;
 
+  // Ánh xạ hàm chuyển giao và tra cứu Owner
+  late ContractFunction _transferProductFunction;
+  late ContractFunction _getOrganizationOwnerFunction;
+
   DashboardBloc({required this.web3client, required this.credentials})
     : super(DashboardInitial()) {
     on<DashboardInitialFetchEvent>(_dashboardInitialFetchEvent);
     on<CreateProductButtonPressedEvent>(_createProductButtonPressedEvent);
     on<FetchProductsEvent>(_fetchProductsEvent);
+    // Đã đăng ký handler chuyển giao
+    on<TransferProductEvent>(_transferProductEvent);
   }
 
   FutureOr<void> _dashboardInitialFetchEvent(
@@ -79,6 +85,11 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       );
       _isRegisteredFunction = deployedContract.function('isRegisteredAuth');
       _getUserFunction = deployedContract.function('getUser');
+      // ÁNH XẠ CÁC HÀM MỚI
+      _transferProductFunction = deployedContract.function('transferProduct');
+      _getOrganizationOwnerFunction = deployedContract.function(
+        'getOrganizationOwner',
+      );
 
       // --- Kiểm tra role ---
       await _checkManufacturer(address);
@@ -115,7 +126,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       throw Exception("❌ Không lấy được dữ liệu user từ blockchain.");
     }
 
-    // ⚡ Sửa điểm lỗi ở đây
+    // Lấy thông tin chi tiết user
     final List<dynamic> userStruct = userData[0] as List<dynamic>;
 
     if (userStruct.length < 4) {
@@ -155,6 +166,52 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     } catch (e, st) {
       developer.log("❌ [CreateProduct] Failed", error: e, stackTrace: st);
       emit(DashboardErrorState("❌ Failed to create product: $e"));
+    }
+  }
+
+  // Xử lý chuyển giao sản phẩm
+  FutureOr<void> _transferProductEvent(
+    TransferProductEvent event,
+    Emitter<DashboardState> emit,
+  ) async {
+    emit(DashboardLoadingState());
+    try {
+      // 1. Tra cứu địa chỉ ví của chủ sở hữu tổ chức nhận từ tên tổ chức
+      final ownerResult = await web3client.call(
+        contract: deployedContract,
+        function: _getOrganizationOwnerFunction,
+        params: [event.receiverOrganizationId],
+      );
+
+      final receiverAddress = ownerResult[0] as EthereumAddress;
+
+      // Kiểm tra địa chỉ có hợp lệ không (address(0) nếu không tìm thấy)
+      // 🟢 SỬA LỖI Ở ĐÂY: Dùng .hex thay vì .toHex()
+      if (receiverAddress.hex == "0x0000000000000000000000000000000000000000") {
+        throw Exception(
+          "❌ Không tìm thấy Organization Owner với ID/Name: ${event.receiverOrganizationId}",
+        );
+      }
+
+      // 2. Gửi giao dịch chuyển giao sản phẩm
+      final txHash = await web3client.sendTransaction(
+        credentials,
+        Transaction.callContract(
+          contract: deployedContract,
+          function: _transferProductFunction,
+          parameters: [event.batchId, receiverAddress],
+        ),
+        chainId: 1337,
+      );
+
+      developer.log("✅ Product transferred! TxHash: $txHash");
+      emit(DashboardSuccessState("✅ Product transferred! TxHash: $txHash"));
+
+      // Sau khi chuyển giao xong, fetch lại danh sách sản phẩm
+      add(FetchProductsEvent());
+    } catch (e, st) {
+      developer.log("❌ [TransferProduct] Failed", error: e, stackTrace: st);
+      emit(DashboardErrorState("❌ Failed to transfer product: $e"));
     }
   }
 

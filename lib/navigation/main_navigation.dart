@@ -5,10 +5,11 @@ import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
 import 'package:untitled/dashboard/bloc/organization_bloc.dart';
 import 'package:untitled/dashboard/bloc/scan_bloc.dart';
 import 'package:untitled/dashboard/ui/account_page.dart';
-import 'package:untitled/dashboard/ui/create_product_page.dart';
 import 'package:untitled/dashboard/ui/home_page.dart';
 import 'package:untitled/dashboard/ui/organization_management_page.dart';
 import 'package:untitled/dashboard/ui/scan_barcode_page.dart';
+
+import '../dashboard/ui/product_management.dart';
 
 class MainNavigationPage extends StatefulWidget {
   const MainNavigationPage({super.key});
@@ -93,7 +94,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
       const HomePage(),
       const OrganizationManagementPage(),
       const ScanBarcodePage(),
-      const CreateProductPage(),
+      const ProductManagementPage(),
       const AccountPage(),
     ];
 
