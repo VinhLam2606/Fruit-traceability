@@ -7,7 +7,7 @@ import 'package:bloc/bloc.dart';
 import 'package:flutter/services.dart';
 import 'package:web3dart/web3dart.dart';
 
-import '../../../auth/service/auth_service.dart'; // ✅ thêm dòng này để gọi AuthService
+import '../../../auth/service/auth_service.dart';
 import '../model/organization.dart';
 
 part 'organization_event.dart';
@@ -25,12 +25,14 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
   late ContractFunction _getOrganizationFunction;
   late ContractFunction _addMemberFunction;
   late ContractFunction _isRegisteredFunction;
+  // 🟢 KHAI BÁO HÀM XÓA MỚI (Từ Users.sol: removeAssociateFromOrganization)
+  late ContractFunction _removeMemberFunction;
 
   OrganizationBloc({required this.web3client, required this.credentials})
     : super(OrganizationInitial()) {
     on<FetchOrganizationDetails>(_onFetchDetails);
     on<AddMemberToOrganization>(_onAddMember);
-    on<AddMemberByEmail>(_onAddMemberByEmail); // ✅ mới thêm
+    on<AddMemberByEmail>(_onAddMemberByEmail);
     on<RemoveMemberFromOrganization>(_onRemoveMember);
   }
 
@@ -69,7 +71,11 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     _getOrganizationFunction = deployedContract.function('getOrganization');
     _addMemberFunction = deployedContract.function(
       'addAssociateToOrganization',
-    ); // ✅ nhớ có trong Users.sol
+    );
+    // 🟢 ÁNH XẠ HÀM XÓA MỚI
+    _removeMemberFunction = deployedContract.function(
+      'removeAssociateFromOrganization',
+    );
 
     _isContractLoaded = true;
   }
@@ -115,6 +121,8 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     FetchOrganizationDetails event,
     Emitter<OrganizationState> emit,
   ) async {
+    // ⚠️ Sửa lỗi: Nếu đang ở state OrganizationLoaded, không cần emit Loading state
+    // trước khi gọi check owner, nhưng ta giữ emit Loading để chỉ ra rằng dữ liệu đang được tải lại.
     emit(OrganizationLoading());
     try {
       await _initializeContract();
@@ -151,6 +159,9 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
       emit(OrganizationLoaded(org));
     } catch (e) {
       developer.log("❌ [OrgBloc] Lỗi khi fetch chi tiết:", error: e);
+      // Khi lỗi, nếu trước đó là OrganizationLoaded, ta có thể muốn giữ lại dữ liệu cũ
+      // (cần thêm logic copyWith vào OrganizationLoaded state - hiện chưa có)
+      // Tạm thời chỉ emit lỗi
       emit(OrganizationError(e.toString()));
     }
   }
@@ -160,7 +171,18 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     AddMemberToOrganization event,
     Emitter<OrganizationState> emit,
   ) async {
-    emit(OrganizationLoading());
+    // 🟢 Sửa lỗi Refresh: Không emit Loading ngay, giữ trạng thái cũ
+    final currentState = state;
+    if (currentState is OrganizationLoaded) {
+      // Giữ dữ liệu cũ trong khi chờ giao dịch
+      // Lưu ý: Nếu muốn thêm indicator loading mà không mất dữ liệu,
+      // cần logic copyWith trong OrganizationLoaded state
+      // Tạm thời chỉ giữ emit Loading cho tới khi có logic copyWith
+      emit(OrganizationLoading());
+    } else {
+      emit(OrganizationLoading());
+    }
+
     try {
       await _initializeContract();
       await _checkIsOrganizationOwner();
@@ -211,8 +233,7 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
 
       developer.log("✅ [OrgBloc] Giao dịch thêm thành viên đã gửi: $txHash");
       emit(OrganizationActionSuccess("✅ Đã gửi yêu cầu thêm thành viên."));
-      await Future.delayed(const Duration(seconds: 3));
-      add(FetchOrganizationDetails());
+      // ⚠️ Đã loại bỏ Future.delayed và add(FetchOrganizationDetails()), UI sẽ tự xử lý refresh.
     } catch (e) {
       developer.log("❌ [OrgBloc] Lỗi khi thêm thành viên:", error: e);
       emit(OrganizationError("Lỗi khi thêm thành viên: ${e.toString()}"));
@@ -224,7 +245,14 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     AddMemberByEmail event,
     Emitter<OrganizationState> emit,
   ) async {
-    emit(OrganizationLoading());
+    // 🟢 Sửa lỗi Refresh: Không emit Loading ngay, giữ trạng thái cũ
+    final currentState = state;
+    if (currentState is OrganizationLoaded) {
+      emit(OrganizationLoaded(currentState.organization)); // Giữ trạng thái cũ
+    } else {
+      emit(OrganizationLoading());
+    }
+
     try {
       final auth = authService.value;
       final targetUser = await auth.getUserWalletByEmail(event.email);
@@ -242,6 +270,7 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
         "📬 [OrgBloc] Chuẩn bị thêm user $username ($memberAddress) vào tổ chức",
       );
 
+      // Chuyển sang sự kiện thêm thành viên (nó sẽ tự emit OrganizationActionSuccess)
       add(AddMemberToOrganization(memberAddress));
     } catch (e) {
       developer.log(
@@ -256,15 +285,40 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     }
   }
 
-  /// Xử lý sự kiện xóa thành viên
+  /// 🟢 Xử lý sự kiện xóa thành viên (Owner removes Associate)
   Future<void> _onRemoveMember(
     RemoveMemberFromOrganization event,
     Emitter<OrganizationState> emit,
   ) async {
-    emit(
-      OrganizationError(
-        "⚠️ Chức năng xóa thành viên chưa được triển khai trên Smart Contract.",
-      ),
-    );
+    // ⚠️ Đảm bảo không bị mất OrganizationLoaded state khi gọi remove member
+    final currentState = state;
+    if (currentState is OrganizationLoaded) {
+      emit(OrganizationLoaded(currentState.organization)); // Giữ trạng thái cũ
+    } else {
+      emit(OrganizationLoading());
+    }
+
+    try {
+      await _initializeContract();
+      await _checkIsOrganizationOwner(); // Chỉ owner mới có quyền xóa
+
+      final associateAddress = EthereumAddress.fromHex(event.memberAddress);
+
+      final txHash = await web3client.sendTransaction(
+        credentials,
+        Transaction.callContract(
+          contract: deployedContract,
+          function: _removeMemberFunction, // 🟢 GỌI HÀM XÓA DÀNH CHO OWNER
+          parameters: [associateAddress],
+        ),
+        chainId: 1337,
+      );
+
+      developer.log("✅ [OrgBloc] Giao dịch xóa thành viên đã gửi: $txHash");
+      emit(OrganizationActionSuccess("✅ Đã xóa thành viên thành công."));
+    } catch (e) {
+      developer.log("❌ [OrgBloc] Lỗi khi xóa thành viên:", error: e);
+      emit(OrganizationError("Lỗi khi xóa thành viên: ${e.toString()}"));
+    }
   }
 }

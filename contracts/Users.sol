@@ -148,4 +148,34 @@ contract Users {
     function getOrganizationOwner(string memory orgName) public view returns (address) {
         return organizationNameToOwner[orgName];
     }
+    function removeAssociateFromOrganization(address associateToRemove) public onlyRegisteredUser {
+        address owner = msg.sender;
+        require(users[owner].role == Types.UserRole.Manufacturer, "Caller is not an organization owner");
+
+        address associateOwner = memberToOrganizationOwner[associateToRemove];
+        require(associateOwner == owner, "Associate not found or does not belong to your organization");
+
+        require(owner != associateToRemove, "Owner cannot remove themselves using this function");
+
+        Types.Organization storage org = organizations[owner];
+        uint256 memberCount = org.organizationMembers.length;
+        bool removed = false;
+
+        for (uint256 i = 0; i < memberCount; i++) {
+            if (org.organizationMembers[i].userID == associateToRemove) {
+                // Gán phần tử cuối cùng vào vị trí bị xoá (swap & pop)
+                org.organizationMembers[i] = org.organizationMembers[memberCount - 1];
+                org.organizationMembers.pop();
+                removed = true;
+                break;
+            }
+        }
+
+        require(removed, "Associate structure mismatch or not found");
+
+        users[associateToRemove].isAlreadyInAnyOrganization = false;
+        memberToOrganizationOwner[associateToRemove] = address(0);
+
+        emit AssociateRemoved(owner, associateToRemove, users[associateToRemove].userName);
+    }
 }

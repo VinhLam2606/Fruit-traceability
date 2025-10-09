@@ -42,6 +42,7 @@ class _CustomerNavigationPageState extends State<CustomerNavigationPage> {
     );
   }
 
+  // ✅ CHỈNH SỬA TẠI ĐÂY
   Widget _buildScaffold() {
     final List<Widget> pages = [
       const ScanBarcodePage(),
@@ -50,14 +51,27 @@ class _CustomerNavigationPageState extends State<CustomerNavigationPage> {
     ];
 
     return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: pages),
+      // 1. Áp dụng màu nền gradient tối cho toàn bộ màn hình
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            // Sử dụng màu nền đồng bộ với AccountPage
+            colors: [Color(0xFF141E30), Color(0xFF243B55)],
+          ),
+        ),
+        // Sử dụng IndexedStack để giữ trạng thái của các trang con
+        child: IndexedStack(index: _currentIndex, children: pages),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: _onItemTapped,
         type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        selectedItemColor: Colors.blueAccent,
-        unselectedItemColor: Colors.grey,
+        // 2. Cập nhật màu sắc cho BottomNavigationBar
+        backgroundColor: const Color(0xFF243B55), // Màu nền tối
+        selectedItemColor: Colors.greenAccent, // Màu điểm nhấn
+        unselectedItemColor: Colors.white70, // Màu cho item không được chọn
         showUnselectedLabels: true,
         items: const [
           BottomNavigationBarItem(

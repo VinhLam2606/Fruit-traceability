@@ -100,7 +100,18 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     ];
 
     return Scaffold(
-      body: IndexedStack(index: _selectedIndex, children: widgetOptions),
+      // Áp dụng màu nền gradient tối cho toàn bộ màn hình
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF141E30), Color(0xFF243B55)],
+          ),
+        ),
+        // Sử dụng IndexedStack để giữ trạng thái của các trang con
+        child: IndexedStack(index: _selectedIndex, children: widgetOptions),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
@@ -122,8 +133,10 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
           ),
         ],
         currentIndex: _selectedIndex,
-        selectedItemColor: Colors.blueAccent,
-        unselectedItemColor: Colors.grey,
+        // Cập nhật màu sắc cho BottomNavigationBar
+        selectedItemColor: Colors.greenAccent, // Màu điểm nhấn
+        unselectedItemColor: Colors.white70, // Màu cho item không được chọn
+        backgroundColor: const Color(0xFF243B55), // Màu nền tối
         showUnselectedLabels: true,
         onTap: _onItemTapped,
         type: BottomNavigationBarType.fixed,
