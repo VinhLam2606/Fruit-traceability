@@ -9,11 +9,19 @@ import '../../../auth/service/auth_service.dart';
 class OrgUserPage extends StatelessWidget {
   const OrgUserPage({super.key});
 
+  // --- Style constants ---
+  static const List<Color> _backgroundGradient = [
+    Color(0xFF141E30), // Darker
+    Color(0xFF243B55), // Slightly Lighter
+  ];
+  static const Color _accentColor = Colors.greenAccent;
+  static const Color _cardColor = Colors.white10;
+
   @override
   Widget build(BuildContext context) {
     final service = authService.value;
 
-    // ✅ Kiểm tra trạng thái đăng nhập
+    // Kiểm tra trạng thái đăng nhập
     if (service.currentUser == null ||
         service.decryptedPrivateKey == null ||
         service.walletAddress == null) {
@@ -27,7 +35,7 @@ class OrgUserPage extends StatelessWidget {
       );
     }
 
-    // ✅ Tạo web3 client & credentials
+    // Tạo web3 client & credentials
     final rpcUrl = "http://10.0.2.2:7545";
     final client = Web3Client(rpcUrl, Client());
     final creds = EthPrivateKey.fromHex(service.decryptedPrivateKey!);
@@ -36,45 +44,64 @@ class OrgUserPage extends StatelessWidget {
       create: (_) =>
           UserOrganizationBloc(web3client: client, credentials: creds)
             ..add(FetchUserOrganization()),
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-          title: const Text("My Organization"),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0.5,
-          centerTitle: true,
+      // ✅ Áp dụng Container gradient cho toàn bộ trang
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: _backgroundGradient,
+          ),
         ),
-        body: BlocBuilder<UserOrganizationBloc, UserOrganizationState>(
-          builder: (context, state) {
-            if (state is UserOrganizationLoading) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        child: Scaffold(
+          backgroundColor: Colors.transparent, // Cần thiết
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            title: const Text(
+              "My Organization",
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            iconTheme: const IconThemeData(color: Colors.white),
+          ),
+          body: BlocBuilder<UserOrganizationBloc, UserOrganizationState>(
+            builder: (context, state) {
+              if (state is UserOrganizationLoading) {
+                return const Center(
+                  child: CircularProgressIndicator(color: _accentColor),
+                );
+              }
 
-            if (state is UserOrganizationEmpty) {
-              return _buildNoOrganizationView();
-            }
+              if (state is UserOrganizationEmpty) {
+                return _buildNoOrganizationView();
+              }
 
-            if (state is UserOrganizationLoaded) {
-              final org = state.organization;
-              return _buildOrganizationInfo(context, org, creds);
-            }
+              if (state is UserOrganizationLoaded) {
+                final org = state.organization;
+                return _buildOrganizationInfo(context, org, creds);
+              }
 
-            if (state is UserOrganizationError) {
-              return Center(
-                child: Text(
-                  state.message,
-                  style: const TextStyle(color: Colors.redAccent),
-                ),
-              );
-            }
+              if (state is UserOrganizationError) {
+                return Center(
+                  child: Text(
+                    state.message,
+                    style: const TextStyle(color: Colors.redAccent),
+                  ),
+                );
+              }
 
-            return const SizedBox.shrink();
-          },
+              return const SizedBox.shrink();
+            },
+          ),
         ),
       ),
     );
   }
+
+  // --- UI Sections ---
 
   // 🔹 Không có tổ chức
   Widget _buildNoOrganizationView() {
@@ -84,18 +111,26 @@ class OrgUserPage extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 80),
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.amberAccent,
+              size: 80,
+            ),
             SizedBox(height: 24),
             Text(
               "You are not part of any organization.",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black87, fontSize: 18),
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             SizedBox(height: 16),
             Text(
               "Contact your manufacturer or organization admin to be added.",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black54, fontSize: 14),
+              style: TextStyle(color: Colors.white70, fontSize: 14),
             ),
           ],
         ),
@@ -113,58 +148,91 @@ class OrgUserPage extends StatelessWidget {
         org.ownerAddress.toLowerCase() == creds.address.hex.toLowerCase();
 
     return RefreshIndicator(
+      color: _accentColor,
       onRefresh: () async {
         context.read<UserOrganizationBloc>().add(FetchUserOrganization());
       },
       child: ListView(
         padding: const EdgeInsets.all(24.0),
         children: [
-          const Icon(Icons.apartment, color: Colors.blueAccent, size: 80),
+          // Header Icon
+          Icon(Icons.apartment, color: _accentColor, size: 80),
           const SizedBox(height: 16),
+
+          // Organization Name
           Text(
             org.organizationName,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              color: Colors.black,
+              color: Colors.white,
               fontSize: 26,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 8),
+
+          // Owner Info
           Text(
             "Owner: ${org.ownerName}",
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.black54, fontSize: 16),
+            style: const TextStyle(color: Colors.white70, fontSize: 16),
           ),
           const SizedBox(height: 24),
-          const Divider(color: Colors.black12),
-          const SizedBox(height: 16),
-          Row(
-            children: const [
-              Icon(Icons.info_outline, color: Colors.blueGrey),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  "You are currently a member of this organization.",
-                  style: TextStyle(color: Colors.black87, fontSize: 15),
+
+          // Status Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _cardColor,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.verified_user, color: _accentColor, size: 30),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isOwner ? "Organization Owner" : "Organization Member",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        "Your role within this organization is established on the blockchain.",
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 32),
+
           Center(
             child: Column(
               children: [
+                // Reload Button
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    foregroundColor: Colors.white,
+                    backgroundColor: Colors.white12, // Màu nền tối
+                    foregroundColor: Colors.white, // Màu chữ/icon
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
                       vertical: 12,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: Colors.white30),
                     ),
                   ),
                   onPressed: () {
@@ -172,11 +240,12 @@ class OrgUserPage extends StatelessWidget {
                       FetchUserOrganization(),
                     );
                   },
-                  icon: const Icon(Icons.refresh),
+                  icon: const Icon(Icons.refresh, color: _accentColor),
                   label: const Text("Reload Organization Info"),
                 ),
                 if (!isOwner) ...[
                   const SizedBox(height: 16),
+                  // Leave Organization Button
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.redAccent,
@@ -193,20 +262,30 @@ class OrgUserPage extends StatelessWidget {
                       showDialog(
                         context: context,
                         builder: (dialogContext) => AlertDialog(
-                          title: const Text("Leave Organization?"),
+                          backgroundColor: const Color(0xFF243B55),
+                          title: const Text(
+                            "Leave Organization?",
+                            style: TextStyle(color: Colors.white),
+                          ),
                           content: const Text(
                             "Are you sure you want to leave this organization? You’ll lose your member status.",
+                            style: TextStyle(color: Colors.white70),
                           ),
                           actions: [
+                            // ✅ Nút 1 (Bên trái): CANCEL
                             TextButton(
                               onPressed: () => Navigator.pop(dialogContext),
-                              child: const Text("Cancel"),
+                              child: const Text(
+                                "Cancel",
+                                style: TextStyle(color: _accentColor),
+                              ),
                             ),
+                            // ✅ Nút 2 (Bên phải): CONFIRM LEAVE (Hành động nguy hiểm)
                             ElevatedButton(
                               onPressed: () {
                                 Navigator.pop(dialogContext);
 
-                                // ✅ Dùng context gốc, không dùng dialogContext
+                                // Dùng context gốc, không dùng dialogContext
                                 context.read<UserOrganizationBloc>().add(
                                   LeaveOrganization(),
                                 );

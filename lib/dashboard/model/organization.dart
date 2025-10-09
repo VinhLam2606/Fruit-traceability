@@ -30,12 +30,33 @@ class Organization {
 
     return Organization(
       organizationName: data[0] as String,
+      // Tên Owner ban đầu sẽ là chuỗi rỗng hoặc giá trị từ Contract
+      // Nó sẽ được cập nhật bằng copyWith trong Bloc.
       ownerName: data[1] as String,
       ownerAddress: (data[2] as EthereumAddress).hex,
       members: members,
       establishedDate: data[4] as BigInt,
       // Đọc giá trị enum từ contract (dưới dạng BigInt) và chuyển thành int.
       organizationStatus: (data[5] as BigInt).toInt(),
+    );
+  }
+
+  // 🛠️ PHƯƠNG THỨC COPYWITH ĐÃ ĐƯỢC THÊM VÀO
+  Organization copyWith({
+    String? organizationName,
+    String? ownerName,
+    String? ownerAddress,
+    List<User>? members,
+    BigInt? establishedDate,
+    int? organizationStatus,
+  }) {
+    return Organization(
+      organizationName: organizationName ?? this.organizationName,
+      ownerName: ownerName ?? this.ownerName,
+      ownerAddress: ownerAddress ?? this.ownerAddress,
+      members: members ?? this.members,
+      establishedDate: establishedDate ?? this.establishedDate,
+      organizationStatus: organizationStatus ?? this.organizationStatus,
     );
   }
 }

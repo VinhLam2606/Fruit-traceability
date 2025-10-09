@@ -1,12 +1,11 @@
-// lib/dashboard/ui/main_navigation.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:untitled/dashboard/bloc/account_bloc.dart';
 import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
 import 'package:untitled/dashboard/bloc/organization_bloc.dart';
+import 'package:untitled/dashboard/bloc/scan_bloc.dart';
 import 'package:untitled/dashboard/ui/account_page.dart';
-import 'package:untitled/dashboard/ui/home_page.dart';
+// import 'package:untitled/dashboard/ui/home_page.dart'; // Đã xóa import HomePage
 import 'package:untitled/dashboard/ui/organization_management_page.dart';
 import 'package:untitled/dashboard/ui/scan_barcode_page.dart';
 
@@ -20,6 +19,8 @@ class MainNavigationPage extends StatefulWidget {
 }
 
 class _MainNavigationPageState extends State<MainNavigationPage> {
+  // ✅ Sau khi xóa Home, chỉ còn 4 trang. Index bắt đầu từ 0.
+  // Trang ScanBarCodePage sẽ là index 0.
   int _selectedIndex = 0;
 
   void _onItemTapped(int index) {
@@ -32,14 +33,12 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   Widget build(BuildContext context) {
     return BlocBuilder<DashboardBloc, DashboardState>(
       builder: (context, state) {
-        // --- Loading hoặc Initial ---
         if (state is DashboardLoadingState || state is DashboardInitial) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // --- Error ---
         if (state is DashboardErrorState) {
           return Scaffold(
             body: Center(
@@ -55,7 +54,6 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
           );
         }
 
-        // --- Success ---
         if (state is DashboardInitialSuccessState ||
             state is ProductsLoadedState ||
             state is DashboardSuccessState) {
@@ -69,20 +67,22 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
                   deployedContract: dashboardBloc.deployedContract,
                 ),
               ),
-              // ✅ SỬA LỖI TẠI ĐÂY
               BlocProvider<OrganizationBloc>(
                 create: (context) => OrganizationBloc(
                   web3client: dashboardBloc.web3client,
                   credentials: dashboardBloc.credentials,
-                  // Dòng 'deployedContract' đã được xóa bỏ
-                )..add(FetchOrganizationDetails()), // fetch ngay khi khởi tạo
+                )..add(FetchOrganizationDetails()),
+              ),
+              // ScanBloc giờ chỉ cần web3client
+              BlocProvider<ScanBloc>(
+                create: (context) =>
+                    ScanBloc(web3client: dashboardBloc.web3client),
               ),
             ],
             child: _buildScaffold(),
           );
         }
 
-        // --- Fallback ---
         return const Scaffold(
           body: Center(child: Text("Trạng thái không xác định.")),
         );
@@ -91,12 +91,12 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   }
 
   Widget _buildScaffold() {
+    // ✅ XÓA HomePage VÀ DỜI ScanBarcodePage LÊN ĐẦU TIÊN
     final List<Widget> widgetOptions = [
-      const HomePage(),
-      const OrganizationManagementPage(),
-      const ScanBarcodePage(),
-      const ProductManagementPage(),
-      const AccountPage(),
+      const ScanBarcodePage(), // Index 0: Scan
+      const OrganizationManagementPage(), // Index 1: Organization
+      const ProductManagementPage(), // Index 2: Product
+      const AccountPage(), // Index 3: Account
     ];
 
     return Scaffold(
@@ -114,19 +114,22 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.business),
-            label: 'Organization',
-          ),
+          // ✅ DỜI SCAN LÊN ĐẦU (Index 0)
           BottomNavigationBarItem(
             icon: Icon(Icons.qr_code_scanner),
             label: 'Scan',
           ),
+          // ✅ DỜI ORGANIZATION LÊN VỊ TRÍ THỨ 2 (Index 1)
+          BottomNavigationBarItem(
+            icon: Icon(Icons.business),
+            label: 'Organization',
+          ),
+          // ✅ PRODUCT (Index 2)
           BottomNavigationBarItem(
             icon: Icon(Icons.inventory_2),
             label: 'Product',
           ),
+          // ✅ ACCOUNT (Index 3)
           BottomNavigationBarItem(
             icon: Icon(Icons.account_circle),
             label: 'Account',

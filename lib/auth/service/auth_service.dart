@@ -212,6 +212,38 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  Future<String?> getUsernameByAddress(String ethAddress) async {
+    try {
+      debugPrint(
+        "🔎 [AuthService] Đang tìm username theo address: $ethAddress",
+      );
+
+      final querySnapshot = await _firestore
+          .collection('users')
+          .where(
+            'eth_address',
+            isEqualTo: ethAddress.toLowerCase(),
+          ) // Quan trọng: Đảm bảo so sánh lowercase
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        debugPrint(
+          "⚠️ [AuthService] Không tìm thấy user với address: $ethAddress",
+        );
+        return null;
+      }
+
+      final username = querySnapshot.docs.first.data()['username'] as String?;
+
+      debugPrint("✅ [AuthService] Tìm thấy username: $username");
+      return username;
+    } catch (e) {
+      debugPrint("❌ [AuthService] Lỗi khi lấy username theo address: $e");
+      return null;
+    }
+  }
+
   /// ✅ Fixed signOut() - no widget return
   Future<void> signOut() async {
     debugPrint("🚪 [SignOut] Đăng xuất");

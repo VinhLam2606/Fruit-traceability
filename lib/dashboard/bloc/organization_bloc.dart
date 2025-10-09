@@ -1,4 +1,5 @@
 // lib/dashboard/bloc/organization_bloc.dart
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
@@ -9,6 +10,7 @@ import 'package:web3dart/web3dart.dart';
 
 import '../../../auth/service/auth_service.dart';
 import '../model/organization.dart';
+import '../model/user.dart';
 
 part 'organization_event.dart';
 part 'organization_state.dart';
@@ -25,7 +27,6 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
   late ContractFunction _getOrganizationFunction;
   late ContractFunction _addMemberFunction;
   late ContractFunction _isRegisteredFunction;
-  // 🟢 KHAI BÁO HÀM XÓA MỚI (Từ Users.sol: removeAssociateFromOrganization)
   late ContractFunction _removeMemberFunction;
 
   OrganizationBloc({required this.web3client, required this.credentials})
@@ -72,7 +73,6 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     _addMemberFunction = deployedContract.function(
       'addAssociateToOrganization',
     );
-    // 🟢 ÁNH XẠ HÀM XÓA MỚI
     _removeMemberFunction = deployedContract.function(
       'removeAssociateFromOrganization',
     );
@@ -121,8 +121,6 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     FetchOrganizationDetails event,
     Emitter<OrganizationState> emit,
   ) async {
-    // ⚠️ Sửa lỗi: Nếu đang ở state OrganizationLoaded, không cần emit Loading state
-    // trước khi gọi check owner, nhưng ta giữ emit Loading để chỉ ra rằng dữ liệu đang được tải lại.
     emit(OrganizationLoading());
     try {
       await _initializeContract();
@@ -152,16 +150,43 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
         return;
       }
 
-      final org = Organization.fromContract(rawOrg);
+      // 1. Lấy dữ liệu tổ chức thô từ Contract
+      Organization org = Organization.fromContract(rawOrg);
+
+      // 2. Ánh xạ tên người dùng cho Owner
+      final ownerUsername = await authService.value.getUsernameByAddress(
+        org.ownerAddress,
+      );
+      org = org.copyWith(ownerName: ownerUsername ?? "Owner (Chưa có tên)");
+
+      // 3. Ánh xạ tên người dùng cho từng thành viên (Members)
+      final List<User> membersWithNames = [];
+      for (var member in org.members) {
+        // Gọi hàm mới: getUsernameByAddress
+        final memberUsername = await authService.value.getUsernameByAddress(
+          member.userId,
+        );
+
+        // SỬA LỖI: member.role đã có sẵn, chỉ cần cập nhật userName
+        membersWithNames.add(
+          User(
+            userId: member.userId,
+            // Sử dụng tên lấy từ Firebase, nếu null thì dùng placeholder
+            userName: memberUsername ?? "Member (Chưa có tên)",
+            role: member.role, // Giữ lại role đã được lấy từ contract
+          ),
+        );
+      }
+
+      // 4. Cập nhật danh sách thành viên vào Organization
+      org = org.copyWith(members: membersWithNames);
+
       developer.log(
         "✅ [OrgBloc] Đã tải xong thông tin tổ chức: ${org.organizationName}",
       );
       emit(OrganizationLoaded(org));
     } catch (e) {
       developer.log("❌ [OrgBloc] Lỗi khi fetch chi tiết:", error: e);
-      // Khi lỗi, nếu trước đó là OrganizationLoaded, ta có thể muốn giữ lại dữ liệu cũ
-      // (cần thêm logic copyWith vào OrganizationLoaded state - hiện chưa có)
-      // Tạm thời chỉ emit lỗi
       emit(OrganizationError(e.toString()));
     }
   }
@@ -171,14 +196,9 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     AddMemberToOrganization event,
     Emitter<OrganizationState> emit,
   ) async {
-    // 🟢 Sửa lỗi Refresh: Không emit Loading ngay, giữ trạng thái cũ
     final currentState = state;
     if (currentState is OrganizationLoaded) {
-      // Giữ dữ liệu cũ trong khi chờ giao dịch
-      // Lưu ý: Nếu muốn thêm indicator loading mà không mất dữ liệu,
-      // cần logic copyWith trong OrganizationLoaded state
-      // Tạm thời chỉ giữ emit Loading cho tới khi có logic copyWith
-      emit(OrganizationLoading());
+      emit(OrganizationLoaded(currentState.organization));
     } else {
       emit(OrganizationLoading());
     }
@@ -233,7 +253,6 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
 
       developer.log("✅ [OrgBloc] Giao dịch thêm thành viên đã gửi: $txHash");
       emit(OrganizationActionSuccess("✅ Đã gửi yêu cầu thêm thành viên."));
-      // ⚠️ Đã loại bỏ Future.delayed và add(FetchOrganizationDetails()), UI sẽ tự xử lý refresh.
     } catch (e) {
       developer.log("❌ [OrgBloc] Lỗi khi thêm thành viên:", error: e);
       emit(OrganizationError("Lỗi khi thêm thành viên: ${e.toString()}"));
@@ -245,7 +264,6 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     AddMemberByEmail event,
     Emitter<OrganizationState> emit,
   ) async {
-    // 🟢 Sửa lỗi Refresh: Không emit Loading ngay, giữ trạng thái cũ
     final currentState = state;
     if (currentState is OrganizationLoaded) {
       emit(OrganizationLoaded(currentState.organization)); // Giữ trạng thái cũ
@@ -270,7 +288,6 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
         "📬 [OrgBloc] Chuẩn bị thêm user $username ($memberAddress) vào tổ chức",
       );
 
-      // Chuyển sang sự kiện thêm thành viên (nó sẽ tự emit OrganizationActionSuccess)
       add(AddMemberToOrganization(memberAddress));
     } catch (e) {
       developer.log(
@@ -290,7 +307,6 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     RemoveMemberFromOrganization event,
     Emitter<OrganizationState> emit,
   ) async {
-    // ⚠️ Đảm bảo không bị mất OrganizationLoaded state khi gọi remove member
     final currentState = state;
     if (currentState is OrganizationLoaded) {
       emit(OrganizationLoaded(currentState.organization)); // Giữ trạng thái cũ
@@ -308,7 +324,7 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
         credentials,
         Transaction.callContract(
           contract: deployedContract,
-          function: _removeMemberFunction, // 🟢 GỌI HÀM XÓA DÀNH CHO OWNER
+          function: _removeMemberFunction, // GỌI HÀM XÓA DÀNH CHO OWNER
           parameters: [associateAddress],
         ),
         chainId: 1337,
