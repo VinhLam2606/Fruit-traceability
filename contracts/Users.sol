@@ -144,4 +144,8 @@ contract Users {
     }
 
     event AssociateRemoved(address indexed orgAddr, address indexed userAddr, string userName);
+
+    function getOrganizationOwner(string memory orgName) public view returns (address) {
+        return organizationNameToOwner[orgName];
+    }
 }

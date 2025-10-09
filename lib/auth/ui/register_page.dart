@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_print, use_build_context_synchronously, deprecated_member_use
 
 import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -33,8 +34,8 @@ class _RegisterPageState extends State<RegisterPage> {
   DeployedContract? usersContract;
 
   static const providedPrivateKey =
-      "0xebd4ba780d7875ea3e168960340f151e00356916d1e90aef4426469d1cdc2620";
-  static const providedAddress = "0x1B40fC3BaBf04Ee400f093D1405944E8fC70c599";
+      "0xf108d3c9bbdf0b1323eed9fff8cdccfc74d216ae999ae5abda9f770a78386cad";
+  static const providedAddress = "0x328f818708E6B4DB02C84dBa2eA597C433C327d0";
 
   @override
   void initState() {
