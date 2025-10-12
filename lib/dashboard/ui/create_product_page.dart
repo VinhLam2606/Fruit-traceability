@@ -169,7 +169,7 @@ class _CreateProductViewState extends State<CreateProductView> {
                   ),
                 ),
                 child: const Text(
-                  "Tạo Sản Phẩm (Không in)",
+                  "Create Product (No Print)", // <-- ĐÃ THAY ĐỔI
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -188,22 +188,10 @@ class _CreateProductViewState extends State<CreateProductView> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                child: isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.black,
-                          strokeWidth: 3,
-                        ),
-                      )
-                    : const Text(
-                        "Tạo & In PDF",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                child: const Text(
+                  "Create & Print PDF", // <-- ĐÃ THAY ĐỔI
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ],
@@ -229,6 +217,8 @@ class _CreateProductViewState extends State<CreateProductView> {
       );
       return;
     }
+
+    _showLoadingDialog(context);
 
     setState(() {
       _isProcessing = true;
@@ -270,15 +260,32 @@ class _CreateProductViewState extends State<CreateProductView> {
       dateController.clear();
       quantityController.text = '1';
     } finally {
+      _hideLoadingDialog(context);
       setState(() => _isProcessing = false);
+    }
+  }
+
+  // 🌀 POPUP LOADING
+  void _showLoadingDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      builder: (_) => const CustomLoadingDialog(),
+    );
+  }
+
+  void _hideLoadingDialog(BuildContext context) {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
     }
   }
 
   Future<void> _generateQrPdf(List<Product> products) async {
     final pdf = pw.Document();
 
-    const int columns = 3; // 3 QR per row
-    const int rows = 4; // 4 rows per page = 12 per A4
+    const int columns = 3;
+    const int rows = 4;
     int totalPerPage = columns * rows;
     int totalPages = (products.length / totalPerPage).ceil();
 
@@ -496,6 +503,70 @@ class _CreateProductViewState extends State<CreateProductView> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+// ===================================================================
+// == CUSTOM LOADING WIDGET ADDED HERE
+// ===================================================================
+
+class CustomLoadingDialog extends StatelessWidget {
+  const CustomLoadingDialog({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // Reuse colors from your theme for consistency
+    const Color accentColor = Colors.greenAccent;
+    const Color cardBackgroundColor = Color(0xFF243B55);
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: cardBackgroundColor.withOpacity(0.95),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: accentColor.withOpacity(0.3)),
+          ),
+          child: const Column(
+            mainAxisSize:
+                MainAxisSize.min, // Helps the Column shrink to fit its content
+            children: [
+              // Use Stack to place the icon in the middle of the rotating circle
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 80,
+                    height: 80,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 5,
+                      valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                    ),
+                  ),
+                  Icon(
+                    Icons.inventory_2, // Product icon
+                    color: accentColor,
+                    size: 40,
+                  ),
+                ],
+              ),
+              SizedBox(height: 20),
+              Text(
+                'Creating Products...',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
