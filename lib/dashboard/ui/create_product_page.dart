@@ -31,10 +31,8 @@ class CreateProductView extends StatefulWidget {
 
 class _CreateProductViewState extends State<CreateProductView> {
   final TextEditingController nameController = TextEditingController();
-  final TextEditingController dateController = TextEditingController();
-  final TextEditingController quantityController = TextEditingController(
-    text: '1',
-  );
+  final TextEditingController quantityController =
+  TextEditingController(text: '1');
   final ScrollController _scrollController = ScrollController();
 
   static const List<Color> _backgroundGradient = [
@@ -63,7 +61,6 @@ class _CreateProductViewState extends State<CreateProductView> {
   @override
   void dispose() {
     nameController.dispose();
-    dateController.dispose();
     quantityController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -109,8 +106,8 @@ class _CreateProductViewState extends State<CreateProductView> {
           builder: (context, state) {
             final isLoading =
                 _isProcessing ||
-                (state is DashboardLoadingState &&
-                    state is! ProductsLoadedState);
+                    (state is DashboardLoadingState &&
+                        state is! ProductsLoadedState);
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -137,13 +134,6 @@ class _CreateProductViewState extends State<CreateProductView> {
           controller: nameController,
           style: const TextStyle(color: Colors.white),
           decoration: _inputDecoration('Product Name'),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: dateController,
-          style: const TextStyle(color: Colors.white),
-          decoration: _inputDecoration('Date (Timestamp in seconds)'),
-          keyboardType: TextInputType.number,
         ),
         const SizedBox(height: 16),
         TextField(
@@ -190,20 +180,20 @@ class _CreateProductViewState extends State<CreateProductView> {
                 ),
                 child: isLoading
                     ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.black,
-                          strokeWidth: 3,
-                        ),
-                      )
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.black,
+                    strokeWidth: 3,
+                  ),
+                )
                     : const Text(
-                        "Tạo & In PDF",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                  "Tạo & In PDF",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
           ],
@@ -213,11 +203,10 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 
   Future<void> _createProductsSequentially(
-    BuildContext context,
-    bool generatePdf,
-  ) async {
+      BuildContext context,
+      bool generatePdf,
+      ) async {
     final int quantity = int.tryParse(quantityController.text) ?? 1;
-    final int date = int.tryParse(dateController.text) ?? 0;
     final String baseName = nameController.text.trim();
 
     if (baseName.isEmpty || quantity <= 0) {
@@ -239,6 +228,9 @@ class _CreateProductViewState extends State<CreateProductView> {
       for (int i = 1; i <= quantity; i++) {
         final generatedBatchId = _generateBatchId();
         final name = quantity > 1 ? "$baseName #$i" : baseName;
+
+        // 🗓 Lấy ngày hiện tại (timestamp giây)
+        final int date = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
         final product = Product(
           batchId: generatedBatchId,
@@ -267,7 +259,6 @@ class _CreateProductViewState extends State<CreateProductView> {
       }
 
       nameController.clear();
-      dateController.clear();
       quantityController.text = '1';
     } finally {
       setState(() => _isProcessing = false);
@@ -277,16 +268,15 @@ class _CreateProductViewState extends State<CreateProductView> {
   Future<void> _generateQrPdf(List<Product> products) async {
     final pdf = pw.Document();
 
-    const int columns = 3; // 3 QR per row
-    const int rows = 4; // 4 rows per page = 12 per A4
+    const int columns = 3;
+    const int rows = 4;
     int totalPerPage = columns * rows;
     int totalPages = (products.length / totalPerPage).ceil();
 
     for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
       final start = pageIndex * totalPerPage;
-      final end = (start + totalPerPage > products.length)
-          ? products.length
-          : start + totalPerPage;
+      final end =
+      (start + totalPerPage > products.length) ? products.length : start + totalPerPage;
 
       final pageProducts = products.sublist(start, end);
 
@@ -372,10 +362,10 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 
   Widget _buildProductList(
-    BuildContext context,
-    DashboardState state,
-    bool isLoading,
-  ) {
+      BuildContext context,
+      DashboardState state,
+      bool isLoading,
+      ) {
     final products = state is ProductsLoadedState
         ? state.products
         : <Product>[];
@@ -400,8 +390,8 @@ class _CreateProductViewState extends State<CreateProductView> {
                 onPressed: isLoading
                     ? null
                     : () {
-                        context.read<DashboardBloc>().add(FetchProductsEvent());
-                      },
+                  context.read<DashboardBloc>().add(FetchProductsEvent());
+                },
               ),
             ],
           ),
