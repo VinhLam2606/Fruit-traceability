@@ -55,7 +55,7 @@ class ProductManagementPage extends StatelessWidget {
             borderRadius: BorderRadius.circular(15),
           ),
           title: Text(
-            "Transfer Product: ${product.name}", // Translated
+            "Transfer Product: ${product.name}",
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
@@ -93,7 +93,7 @@ class ProductManagementPage extends StatelessWidget {
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
               child: const Text(
-                "Cancel", // Translated
+                "Cancel",
                 style: TextStyle(color: Colors.redAccent),
               ),
             ),
@@ -114,7 +114,7 @@ class ProductManagementPage extends StatelessWidget {
                 backgroundColor: _accentColor,
                 foregroundColor: Colors.black,
               ),
-              child: const Text("Transfer"), // Translated
+              child: const Text("Transfer"),
             ),
           ],
         );
@@ -128,7 +128,6 @@ class ProductManagementPage extends StatelessWidget {
     String batchId,
   ) async {
     try {
-      // 1️⃣ Request permission to save files (supports Android 13+)
       if (Platform.isAndroid) {
         final permissions = await [
           Permission.storage,
@@ -136,20 +135,16 @@ class ProductManagementPage extends StatelessWidget {
           Permission.mediaLibrary,
         ].request();
 
-        // If all are denied
         if (permissions.values.every((status) => !status.isGranted)) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                '❌ App does not have permission to save files!',
-              ), // Translated
+              content: Text('❌ App does not have permission to save files!'),
             ),
           );
           return;
         }
       }
 
-      // 2️⃣ Capture the widget as an image
       final boundary =
           repaintKey.currentContext!.findRenderObject()
               as RenderRepaintBoundary;
@@ -157,7 +152,6 @@ class ProductManagementPage extends StatelessWidget {
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       final pngBytes = byteData!.buffer.asUint8List();
 
-      // 3️⃣ Get the save directory (prefer Downloads if available)
       Directory? directory;
       if (Platform.isAndroid) {
         directory = Directory('/storage/emulated/0/Download');
@@ -168,23 +162,21 @@ class ProductManagementPage extends StatelessWidget {
         directory = await getDownloadsDirectory();
       }
 
-      // 4️⃣ Save the file
       final filePath = '${directory!.path}/barcode_$batchId.png';
       final file = File(filePath);
       await file.writeAsBytes(pngBytes);
 
-      // 5️⃣ Notify the result
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✅ Barcode saved to:\n$filePath'), // Translated
+          content: Text('✅ Barcode saved to:\n$filePath'),
           backgroundColor: _accentColor,
           duration: const Duration(seconds: 4),
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Error saving barcode: $e')),
-      ); // Translated
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('❌ Error saving barcode: $e')));
     }
   }
 
@@ -204,7 +196,7 @@ class ProductManagementPage extends StatelessWidget {
           backgroundColor: Colors.transparent,
           elevation: 0,
           title: const Text(
-            'Product Management', // Translated
+            'Product Management',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           iconTheme: const IconThemeData(color: Colors.white),
@@ -237,9 +229,16 @@ class ProductManagementPage extends StatelessWidget {
             }
           },
           builder: (context, state) {
+            // Lấy danh sách sản phẩm từ state
             final products = state is ProductsLoadedState
                 ? state.products
                 : <Product>[];
+
+            // =================================================================
+            // == SẮP XẾP SẢN PHẨM THEO NGÀY MỚI NHẤT (ĐÃ THÊM) ==
+            products.sort((a, b) => b.date.compareTo(a.date));
+            // =================================================================
+
             if (state is DashboardLoadingState && products.isEmpty) {
               return const Center(
                 child: CircularProgressIndicator(color: _accentColor),
@@ -250,7 +249,7 @@ class ProductManagementPage extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
                   child: Text(
-                    "Error loading products: ${state.error}", // Translated
+                    "Error loading products: ${state.error}",
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: Colors.redAccent,
@@ -272,7 +271,7 @@ class ProductManagementPage extends StatelessWidget {
                       color: Colors.black,
                     ),
                     label: const Text(
-                      "Create New Product", // Translated
+                      "Create New Product",
                       style: TextStyle(fontSize: 18, color: Colors.black),
                     ),
                     style: ElevatedButton.styleFrom(
@@ -289,7 +288,7 @@ class ProductManagementPage extends StatelessWidget {
                   child: products.isEmpty
                       ? const Center(
                           child: Text(
-                            "No products found.", // Translated
+                            "No products found.",
                             style: TextStyle(color: Colors.white70),
                           ),
                         )
@@ -345,7 +344,7 @@ class ProductManagementPage extends StatelessWidget {
                                             ),
                                           ),
                                           Text(
-                                            "Date Created: ${_formatTimestamp(product.date)}", // Translated
+                                            "Date Created: ${_formatTimestamp(product.date)}",
                                             style: const TextStyle(
                                               color: Colors.white54,
                                               fontSize: 12,
@@ -381,8 +380,7 @@ class ProductManagementPage extends StatelessWidget {
                                                 Icons.download_rounded,
                                                 color: _accentColor,
                                               ),
-                                              tooltip:
-                                                  "Download Barcode", // Translated
+                                              tooltip: "Download Barcode",
                                               onPressed: () => _saveBarcodePNG(
                                                 context,
                                                 barcodeKey,
@@ -402,8 +400,7 @@ class ProductManagementPage extends StatelessWidget {
                                             color: _accentColor,
                                             size: 26,
                                           ),
-                                          tooltip:
-                                              'Transfer Product', // Translated
+                                          tooltip: 'Transfer Product',
                                           onPressed: () =>
                                               _showTransferProductModal(
                                                 context,
@@ -417,14 +414,14 @@ class ProductManagementPage extends StatelessWidget {
                                             size: 26,
                                             color: Colors.white70,
                                           ),
-                                          tooltip: 'View Details', // Translated
+                                          tooltip: 'View Details',
                                           onPressed: () =>
                                               ScaffoldMessenger.of(
                                                 context,
                                               ).showSnackBar(
                                                 const SnackBar(
                                                   content: Text(
-                                                    "View product details... (Coming soon)", // Translated
+                                                    "View product details... (Coming soon)",
                                                   ),
                                                 ),
                                               ),
