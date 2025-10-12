@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:untitled/auth/service/auth_service.dart';
 import 'package:untitled/dashboard/bloc/account_bloc.dart';
+
 import '../../auth/auth_layout.dart';
 
 class AccountPage extends StatefulWidget {
@@ -29,7 +30,7 @@ class _AccountPageState extends State<AccountPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text(
-          'Tài Khoản',
+          'Account', // Translated
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -39,12 +40,14 @@ class _AccountPageState extends State<AccountPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
-            tooltip: "Đăng xuất",
+            tooltip: "Log Out", // Translated
             onPressed: () async {
               await authService.value.signOut();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("✅ Đã đăng xuất thành công")),
+                  const SnackBar(
+                    content: Text("✅ Logged out successfully"),
+                  ), // Translated
                 );
                 Navigator.of(context).pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const AuthLayout()),
@@ -148,9 +151,9 @@ class _AccountPageState extends State<AccountPage> {
                     ),
                     const SizedBox(height: 35),
 
-                    // ⚡ Wallet section
+                    // ⚡ Account section
                     const Text(
-                      "Thông tin tài khoản",
+                      "Account Information", // Translated
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 18,
@@ -159,14 +162,14 @@ class _AccountPageState extends State<AccountPage> {
                     ),
                     const SizedBox(height: 10),
                     _buildInfoCard(
-                      'Địa chỉ ví',
+                      'Wallet Address', // Translated
                       state.userAddress,
                       isAddress: true,
                       context: context,
                     ),
                     const SizedBox(height: 10),
-                    _buildInfoCard('Tên người dùng', state.userName),
-                    _buildInfoCard('Vai trò', state.role),
+                    _buildInfoCard('Username', state.userName), // Translated
+                    _buildInfoCard('Role', state.role), // Translated
 
                     const SizedBox(height: 60),
                     Center(
@@ -210,7 +213,7 @@ class _AccountPageState extends State<AccountPage> {
 
             return const Center(
               child: Text(
-                "Đang tải dữ liệu...",
+                "Loading data...", // Translated
                 style: TextStyle(color: Colors.white70, fontSize: 16),
               ),
             );
@@ -263,7 +266,9 @@ class _AccountPageState extends State<AccountPage> {
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: value));
                   ScaffoldMessenger.of(context!).showSnackBar(
-                    const SnackBar(content: Text('📋 Đã sao chép địa chỉ ví!')),
+                    const SnackBar(
+                      content: Text('📋 Wallet address copied!'),
+                    ), // Translated
                   );
                 },
               )

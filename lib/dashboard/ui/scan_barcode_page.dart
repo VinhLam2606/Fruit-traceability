@@ -14,7 +14,7 @@ class ScanBarcodePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Lấy instance của ScanBloc
+    // Get the ScanBloc instance
     final scanBloc = context.read<ScanBloc>();
 
     return Scaffold(
@@ -23,7 +23,7 @@ class ScanBarcodePage extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text(
-          'Quét Mã Sản Phẩm',
+          'Scan Product Code', // Translated
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -39,7 +39,7 @@ class ScanBarcodePage extends StatelessWidget {
             colors: [Color(0xFF141E30), Color(0xFF243B55)],
           ),
         ),
-        // Sử dụng BlocConsumer để vừa xây dựng UI vừa lắng nghe actions
+        // Use BlocConsumer to both build the UI and listen for actions
         child: BlocConsumer<ScanBloc, ScanState>(
           listener: (context, state) {
             if (state is ScanErrorState) {
@@ -56,26 +56,28 @@ class ScanBarcodePage extends StatelessWidget {
           builder: (context, state) {
             return Column(
               children: [
-                // --- 1. Khu vực máy quét Barcode ---
+                // --- 1. Barcode Scanner Area ---
                 Container(
                   padding: const EdgeInsets.only(top: 80),
                   height: 330,
                   child: MobileScanner(
                     controller: MobileScannerController(
-                      // Chỉ quét 1 lần duy nhất cho mỗi mã
+                      // Only scan each code once to avoid rapid rescans
                       detectionTimeoutMs: 1000,
                     ),
                     onDetect: (capture) {
                       final code = capture.barcodes.first.rawValue;
-                      if (code != null && code.isNotEmpty && state is! ScanLoadingState) {
-                        // Kích hoạt Event BarcodeScannedEvent
+                      if (code != null &&
+                          code.isNotEmpty &&
+                          state is! ScanLoadingState) {
+                        // Trigger the BarcodeScannedEvent
                         scanBloc.add(BarcodeScannedEvent(code));
                       }
                     },
                   ),
                 ),
 
-                // --- 2. Hiển thị Trạng thái (Loading, Data, Error) ---
+                // --- 2. Status Display (Loading, Data, Error) ---
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -94,11 +96,7 @@ class ScanBarcodePage extends StatelessWidget {
   //                         BUILDER FUNCTIONS
   // ====================================================================
 
-  Widget _buildContent(
-      BuildContext context,
-      ScanState state,
-      ScanBloc bloc,
-      ) {
+  Widget _buildContent(BuildContext context, ScanState state, ScanBloc bloc) {
     // Loading State
     if (state is ScanLoadingState || state is ProductHistoryLoadingState) {
       return const Center(
@@ -109,8 +107,8 @@ class ScanBarcodePage extends StatelessWidget {
     // Initial State / Error State
     if (state is ScanInitialState || state is ScanErrorState) {
       final message = state is ScanErrorState
-          ? "Lỗi: ${state.error}\nVui lòng scan lại."
-          : "Hướng camera vào mã vạch để quét sản phẩm.";
+          ? "Error: ${state.error}\nPlease scan again." // Translated
+          : "Point the camera at a barcode to scan a product."; // Translated
 
       return Center(
         child: Text(
@@ -129,7 +127,7 @@ class ScanBarcodePage extends StatelessWidget {
       return RefreshIndicator(
         color: Colors.greenAccent,
         onRefresh: () async {
-          // Refresh: Gửi lại Event quét mã vạch để lấy lại thông tin sản phẩm
+          // Refresh: Resend the barcode scan event to refetch product info
           bloc.add(BarcodeScannedEvent(product.batchId));
         },
         child: ListView(
@@ -141,13 +139,16 @@ class ScanBarcodePage extends StatelessWidget {
             // ⚡ Transaction History Section
             _buildHistorySection(context, product, history, state, bloc),
 
-            // Hiển thị lỗi tải lịch sử cục bộ (nếu có)
+            // Display local history loading error (if any)
             if (state.historyErrorMessage != null)
               Padding(
                 padding: const EdgeInsets.only(top: 10),
                 child: Text(
                   state.historyErrorMessage!,
-                  style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -156,7 +157,7 @@ class ScanBarcodePage extends StatelessWidget {
       );
     }
 
-    return const Center(child: Text("Đang tải dữ liệu..."));
+    return const Center(child: Text("Loading data...")); // Translated
   }
 
   Widget _buildProductHeader(BuildContext context, Product product) {
@@ -189,28 +190,37 @@ class ScanBarcodePage extends StatelessWidget {
             ),
           ),
           const Divider(color: Colors.white38, height: 25),
-          _infoRow('Batch ID', product.batchId, isAddress: true, context: context),
-          _infoRow('Tổ chức', product.organizationName),
           _infoRow(
-            'Ngày tạo',
-            DateTime.fromMillisecondsSinceEpoch(product.date.toInt() * 1000)
-                .toLocal()
-                .toString()
-                .split(' ')[0],
+            'Batch ID',
+            product.batchId,
+            isAddress: true,
+            context: context,
           ),
-          _infoRow('Chủ sở hữu hiện tại', product.currentOwner, isAddress: true, context: context),
+          _infoRow('Organization', product.organizationName), // Translated
+          _infoRow(
+            'Date Created', // Translated
+            DateTime.fromMillisecondsSinceEpoch(
+              product.date.toInt() * 1000,
+            ).toLocal().toString().split(' ')[0],
+          ),
+          _infoRow(
+            'Current Owner',
+            product.currentOwner,
+            isAddress: true,
+            context: context,
+          ), // Translated
         ],
       ),
     );
   }
 
   Widget _buildHistorySection(
-      BuildContext context,
-      Product product,
-      List<ProductHistory>? history,
-      ProductInfoLoadedState state,
-      ScanBloc bloc,
-      ) {
+    BuildContext context,
+    Product product,
+    List<ProductHistory>? history,
+    ProductInfoLoadedState state,
+    ScanBloc bloc,
+  ) {
     if (state is! ProductDetailsLoadedState) {
       return Center(
         child: Padding(
@@ -226,11 +236,11 @@ class ScanBarcodePage extends StatelessWidget {
             ),
             icon: const Icon(Icons.history, size: 20),
             label: const Text(
-              "Xem Lịch sử Giao dịch",
+              "View Transaction History", // Translated
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             onPressed: () {
-              // Kích hoạt Event tải lịch sử
+              // Trigger the event to fetch history
               bloc.add(FetchProductHistoryEvent(product.batchId));
             },
           ),
@@ -243,7 +253,7 @@ class ScanBarcodePage extends StatelessWidget {
       children: [
         const SizedBox(height: 30),
         const Text(
-          "Lịch sử giao dịch",
+          "Transaction History", // Translated
           style: TextStyle(
             color: Colors.white70,
             fontSize: 18,
@@ -253,7 +263,7 @@ class ScanBarcodePage extends StatelessWidget {
         const SizedBox(height: 10),
         if (history!.isEmpty)
           const Text(
-            "Chưa có giao dịch nào được ghi lại.",
+            "No transactions have been recorded yet.", // Translated
             style: TextStyle(color: Colors.white54),
           )
         else
@@ -271,7 +281,10 @@ class ScanBarcodePage extends StatelessWidget {
         border: Border.all(color: Colors.white.withOpacity(0.15)),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 10,
+        ),
         title: Text(
           h.note,
           style: const TextStyle(
@@ -283,13 +296,13 @@ class ScanBarcodePage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            _historyDetailRow('Từ', h.from),
-            _historyDetailRow('Đến', h.to),
+            _historyDetailRow('From', h.from), // Translated
+            _historyDetailRow('To', h.to), // Translated
             _historyDetailRow(
-              'Thời gian',
-              DateTime.fromMillisecondsSinceEpoch(h.timestamp.toInt() * 1000)
-                  .toLocal()
-                  .toString(),
+              'Time', // Translated
+              DateTime.fromMillisecondsSinceEpoch(
+                h.timestamp.toInt() * 1000,
+              ).toLocal().toString(),
             ),
           ],
         ),
@@ -298,11 +311,11 @@ class ScanBarcodePage extends StatelessWidget {
   }
 
   Widget _infoRow(
-      String title,
-      String value, {
-        bool isAddress = false,
-        BuildContext? context,
-      }) {
+    String title,
+    String value, {
+    bool isAddress = false,
+    BuildContext? context,
+  }) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -332,7 +345,9 @@ class ScanBarcodePage extends StatelessWidget {
                       fontFamily: isAddress ? "monospace" : null,
                     ),
                     maxLines: isAddress ? 1 : 2,
-                    overflow: isAddress ? TextOverflow.ellipsis : TextOverflow.clip,
+                    overflow: isAddress
+                        ? TextOverflow.ellipsis
+                        : TextOverflow.clip,
                   ),
                 ),
                 if (isAddress && context != null)
@@ -346,7 +361,9 @@ class ScanBarcodePage extends StatelessWidget {
                       Clipboard.setData(ClipboardData(text: value));
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('📋 Đã sao chép địa chỉ!'),
+                          content: Text(
+                            '📋 Address copied to clipboard!',
+                          ), // Translated
                           duration: Duration(seconds: 1),
                         ),
                       );

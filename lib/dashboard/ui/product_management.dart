@@ -55,7 +55,7 @@ class ProductManagementPage extends StatelessWidget {
             borderRadius: BorderRadius.circular(15),
           ),
           title: Text(
-            "Chuyển Giao Sản Phẩm: ${product.name}",
+            "Transfer Product: ${product.name}",
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
@@ -93,7 +93,7 @@ class ProductManagementPage extends StatelessWidget {
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
               child: const Text(
-                "Hủy",
+                "Cancel",
                 style: TextStyle(color: Colors.redAccent),
               ),
             ),
@@ -114,7 +114,7 @@ class ProductManagementPage extends StatelessWidget {
                 backgroundColor: _accentColor,
                 foregroundColor: Colors.black,
               ),
-              child: const Text("Chuyển Giao"),
+              child: const Text("Transfer"),
             ),
           ],
         );
@@ -128,7 +128,6 @@ class ProductManagementPage extends StatelessWidget {
     String batchId,
   ) async {
     try {
-      // 1️⃣ Xin quyền lưu file (hỗ trợ Android 13+)
       if (Platform.isAndroid) {
         final permissions = await [
           Permission.storage,
@@ -136,18 +135,16 @@ class ProductManagementPage extends StatelessWidget {
           Permission.mediaLibrary,
         ].request();
 
-        // Nếu tất cả đều bị từ chối
         if (permissions.values.every((status) => !status.isGranted)) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('❌ Ứng dụng không có quyền lưu file!'),
+              content: Text('❌ App does not have permission to save files!'),
             ),
           );
           return;
         }
       }
 
-      // 2️⃣ Chụp widget thành ảnh
       final boundary =
           repaintKey.currentContext!.findRenderObject()
               as RenderRepaintBoundary;
@@ -155,7 +152,6 @@ class ProductManagementPage extends StatelessWidget {
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       final pngBytes = byteData!.buffer.asUint8List();
 
-      // 3️⃣ Lấy thư mục lưu (ưu tiên Download nếu có)
       Directory? directory;
       if (Platform.isAndroid) {
         directory = Directory('/storage/emulated/0/Download');
@@ -166,15 +162,13 @@ class ProductManagementPage extends StatelessWidget {
         directory = await getDownloadsDirectory();
       }
 
-      // 4️⃣ Lưu file
       final filePath = '${directory!.path}/barcode_$batchId.png';
       final file = File(filePath);
       await file.writeAsBytes(pngBytes);
 
-      // 5️⃣ Thông báo kết quả
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✅ Mã vạch đã được lưu tại:\n$filePath'),
+          content: Text('✅ Barcode saved to:\n$filePath'),
           backgroundColor: _accentColor,
           duration: const Duration(seconds: 4),
         ),
@@ -182,7 +176,7 @@ class ProductManagementPage extends StatelessWidget {
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('❌ Lỗi khi lưu mã vạch: $e')));
+      ).showSnackBar(SnackBar(content: Text('❌ Error saving barcode: $e')));
     }
   }
 
@@ -202,7 +196,7 @@ class ProductManagementPage extends StatelessWidget {
           backgroundColor: Colors.transparent,
           elevation: 0,
           title: const Text(
-            'Quản Lý Sản Phẩm',
+            'Product Management',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           iconTheme: const IconThemeData(color: Colors.white),
@@ -235,9 +229,16 @@ class ProductManagementPage extends StatelessWidget {
             }
           },
           builder: (context, state) {
+            // Lấy danh sách sản phẩm từ state
             final products = state is ProductsLoadedState
                 ? state.products
                 : <Product>[];
+
+            // =================================================================
+            // == SẮP XẾP SẢN PHẨM THEO NGÀY MỚI NHẤT (ĐÃ THÊM) ==
+            products.sort((a, b) => b.date.compareTo(a.date));
+            // =================================================================
+
             if (state is DashboardLoadingState && products.isEmpty) {
               return const Center(
                 child: CircularProgressIndicator(color: _accentColor),
@@ -248,7 +249,7 @@ class ProductManagementPage extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
                   child: Text(
-                    "Lỗi tải sản phẩm: ${state.error}",
+                    "Error loading products: ${state.error}",
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: Colors.redAccent,
@@ -270,7 +271,7 @@ class ProductManagementPage extends StatelessWidget {
                       color: Colors.black,
                     ),
                     label: const Text(
-                      "Tạo Sản Phẩm Mới",
+                      "Create New Product",
                       style: TextStyle(fontSize: 18, color: Colors.black),
                     ),
                     style: ElevatedButton.styleFrom(
@@ -287,7 +288,7 @@ class ProductManagementPage extends StatelessWidget {
                   child: products.isEmpty
                       ? const Center(
                           child: Text(
-                            "Không tìm thấy sản phẩm nào.",
+                            "No products found.",
                             style: TextStyle(color: Colors.white70),
                           ),
                         )
@@ -343,7 +344,7 @@ class ProductManagementPage extends StatelessWidget {
                                             ),
                                           ),
                                           Text(
-                                            "Ngày tạo: ${_formatTimestamp(product.date)}",
+                                            "Date Created: ${_formatTimestamp(product.date)}",
                                             style: const TextStyle(
                                               color: Colors.white54,
                                               fontSize: 12,
@@ -379,7 +380,7 @@ class ProductManagementPage extends StatelessWidget {
                                                 Icons.download_rounded,
                                                 color: _accentColor,
                                               ),
-                                              tooltip: "Tải Barcode",
+                                              tooltip: "Download Barcode",
                                               onPressed: () => _saveBarcodePNG(
                                                 context,
                                                 barcodeKey,
@@ -399,7 +400,7 @@ class ProductManagementPage extends StatelessWidget {
                                             color: _accentColor,
                                             size: 26,
                                           ),
-                                          tooltip: 'Chuyển Giao Sản Phẩm',
+                                          tooltip: 'Transfer Product',
                                           onPressed: () =>
                                               _showTransferProductModal(
                                                 context,
@@ -413,14 +414,14 @@ class ProductManagementPage extends StatelessWidget {
                                             size: 26,
                                             color: Colors.white70,
                                           ),
-                                          tooltip: 'Xem Chi Tiết',
+                                          tooltip: 'View Details',
                                           onPressed: () =>
                                               ScaffoldMessenger.of(
                                                 context,
                                               ).showSnackBar(
                                                 const SnackBar(
                                                   content: Text(
-                                                    "Xem chi tiết sản phẩm... (Sắp ra mắt)",
+                                                    "View product details... (Coming soon)",
                                                   ),
                                                 ),
                                               ),
