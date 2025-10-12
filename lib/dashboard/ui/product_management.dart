@@ -1,24 +1,27 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
 import 'package:untitled/dashboard/model/product.dart';
 import 'package:untitled/dashboard/ui/create_product_page.dart';
 
-// Trang quản lý sản phẩm tổng quát
 class ProductManagementPage extends StatelessWidget {
   const ProductManagementPage({super.key});
 
-  // --- Style constants ---
   static const List<Color> _backgroundGradient = [
-    Color(0xFF141E30), // Tối hơn
-    Color(0xFF243B55), // Sáng hơn một chút
+    Color(0xFF141E30),
+    Color(0xFF243B55),
   ];
   static const Color _accentColor = Colors.greenAccent;
   static const Color _cardColor = Colors.white10;
 
-  // Hàm tiện ích để định dạng thời gian
   String _formatTimestamp(BigInt timestamp) {
     if (timestamp == BigInt.zero) return "N/A";
     final dateTime = DateTime.fromMillisecondsSinceEpoch(
@@ -27,14 +30,12 @@ class ProductManagementPage extends StatelessWidget {
     return DateFormat('dd/MM/yyyy').format(dateTime);
   }
 
-  // Phương thức hiển thị trang tạo sản phẩm dưới dạng Bottom Sheet
   void _showCreateProductModal(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent, // Rất quan trọng cho gradient
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        // Đảm bảo BlocProvider vẫn được truyền xuống cho CreateProductPage
         return BlocProvider.value(
           value: context.read<DashboardBloc>(),
           child: const CreateProductPage(),
@@ -43,15 +44,13 @@ class ProductManagementPage extends StatelessWidget {
     );
   }
 
-  // Phương thức hiển thị Modal chuyển giao sản phẩm (Đã style lại)
   void _showTransferProductModal(BuildContext context, Product product) {
     final TextEditingController receiverIdController = TextEditingController();
-
     showDialog(
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF243B55), // Nền tối
+          backgroundColor: const Color(0xFF243B55),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),
           ),
@@ -65,7 +64,6 @@ class ProductManagementPage extends StatelessWidget {
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   "Batch ID: ${product.batchId}",
@@ -115,9 +113,6 @@ class ProductManagementPage extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: _accentColor,
                 foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
               ),
               child: const Text("Chuyển Giao"),
             ),
@@ -127,10 +122,73 @@ class ProductManagementPage extends StatelessWidget {
     );
   }
 
+  Future<void> _saveBarcodePNG(
+    BuildContext context,
+    GlobalKey repaintKey,
+    String batchId,
+  ) async {
+    try {
+      // 1️⃣ Xin quyền lưu file (hỗ trợ Android 13+)
+      if (Platform.isAndroid) {
+        final permissions = await [
+          Permission.storage,
+          Permission.photos,
+          Permission.mediaLibrary,
+        ].request();
+
+        // Nếu tất cả đều bị từ chối
+        if (permissions.values.every((status) => !status.isGranted)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Ứng dụng không có quyền lưu file!'),
+            ),
+          );
+          return;
+        }
+      }
+
+      // 2️⃣ Chụp widget thành ảnh
+      final boundary =
+          repaintKey.currentContext!.findRenderObject()
+              as RenderRepaintBoundary;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final pngBytes = byteData!.buffer.asUint8List();
+
+      // 3️⃣ Lấy thư mục lưu (ưu tiên Download nếu có)
+      Directory? directory;
+      if (Platform.isAndroid) {
+        directory = Directory('/storage/emulated/0/Download');
+        if (!(await directory.exists())) {
+          directory = await getExternalStorageDirectory();
+        }
+      } else {
+        directory = await getDownloadsDirectory();
+      }
+
+      // 4️⃣ Lưu file
+      final filePath = '${directory!.path}/barcode_$batchId.png';
+      final file = File(filePath);
+      await file.writeAsBytes(pngBytes);
+
+      // 5️⃣ Thông báo kết quả
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Mã vạch đã được lưu tại:\n$filePath'),
+          backgroundColor: _accentColor,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('❌ Lỗi khi lưu mã vạch: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      // 1. Áp dụng gradient nền cho toàn bộ trang
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -149,24 +207,17 @@ class ProductManagementPage extends StatelessWidget {
           ),
           iconTheme: const IconThemeData(color: Colors.white),
           actions: [
-            // Nút Refresh
             IconButton(
               icon: const Icon(Icons.refresh, color: _accentColor),
-              onPressed: () {
-                // Gửi event fetch lại danh sách sản phẩm
-                context.read<DashboardBloc>().add(FetchProductsEvent());
-              },
+              onPressed: () =>
+                  context.read<DashboardBloc>().add(FetchProductsEvent()),
             ),
           ],
         ),
         body: BlocConsumer<DashboardBloc, DashboardState>(
-          listenWhen: (previous, current) =>
-              current is DashboardSuccessState ||
-              current is DashboardErrorState,
           listener: (context, state) {
             if (state is DashboardSuccessState &&
                 !state.message.contains("Product created")) {
-              // Hiển thị thông báo thành công cho giao dịch chuyển giao (Transfer)
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(state.message),
@@ -175,7 +226,6 @@ class ProductManagementPage extends StatelessWidget {
               );
             } else if (state is DashboardErrorState &&
                 !state.error.contains("create product")) {
-              // Hiển thị thông báo lỗi cho giao dịch chuyển giao
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(state.error),
@@ -188,14 +238,11 @@ class ProductManagementPage extends StatelessWidget {
             final products = state is ProductsLoadedState
                 ? state.products
                 : <Product>[];
-
-            // --- Logic Loading/Error ---
             if (state is DashboardLoadingState && products.isEmpty) {
               return const Center(
                 child: CircularProgressIndicator(color: _accentColor),
               );
             }
-
             if (state is DashboardErrorState && products.isEmpty) {
               return Center(
                 child: Padding(
@@ -211,11 +258,9 @@ class ProductManagementPage extends StatelessWidget {
                 ),
               );
             }
-            // --- End Logic Loading/Error ---
 
             return Column(
               children: [
-                // Nút "Create Product"
                 Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: ElevatedButton.icon(
@@ -229,8 +274,7 @@ class ProductManagementPage extends StatelessWidget {
                       style: TextStyle(fontSize: 18, color: Colors.black),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _accentColor, // Màu điểm nhấn
-                      foregroundColor: Colors.black,
+                      backgroundColor: _accentColor,
                       minimumSize: const Size(double.infinity, 55),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -239,7 +283,6 @@ class ProductManagementPage extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Danh sách sản phẩm (Product List)
                 Expanded(
                   child: products.isEmpty
                       ? const Center(
@@ -252,23 +295,23 @@ class ProductManagementPage extends StatelessWidget {
                           itemCount: products.length,
                           itemBuilder: (context, index) {
                             final Product product = products[index];
+                            final barcodeKey = GlobalKey();
+
                             return Container(
                               margin: const EdgeInsets.symmetric(
                                 horizontal: 16,
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: _cardColor, // Màu nền tối cho Card
+                                color: _cardColor,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: Colors.white12),
                               ),
-                              // ✅ THAY THẾ LISTTILE BẰNG ROW TÙY CHỈNH ĐỂ KHẮC PHỤC LỖI TRÀN
                               child: Padding(
                                 padding: const EdgeInsets.all(16.0),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // Phần Leading (Icon)
                                     CircleAvatar(
                                       backgroundColor: _accentColor.withOpacity(
                                         0.3,
@@ -279,7 +322,6 @@ class ProductManagementPage extends StatelessWidget {
                                       ),
                                     ),
                                     const SizedBox(width: 16),
-                                    // Phần Title + Subtitle + Barcode
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
@@ -308,43 +350,48 @@ class ProductManagementPage extends StatelessWidget {
                                             ),
                                           ),
                                           const SizedBox(height: 12),
-                                          // Barcode
                                           Center(
-                                            child: Container(
-                                              // ✅ TĂNG CHIỀU RỘNG LÊN 250
-                                              width: 250,
-                                              // ✅ TĂNG CHIỀU CAO LÊN 70
-                                              height: 70,
-                                              margin:
-                                                  const EdgeInsets.symmetric(
-                                                    vertical: 8,
-                                                  ),
-                                              // ✅ NỀN TRẮNG
-                                              color: Colors.white,
-                                              padding: const EdgeInsets.all(4),
-                                              child: BarcodeWidget(
-                                                barcode: Barcode.code128(),
-                                                data: product.batchId,
-                                                drawText: true,
-                                                style: const TextStyle(
-                                                  // ✅ TĂNG KÍCH THƯỚC CHỮ
-                                                  fontSize: 16,
-                                                  color:
-                                                      Colors.black, // TEXT ĐEN
+                                            child: RepaintBoundary(
+                                              key: barcodeKey,
+                                              child: Container(
+                                                width: 250,
+                                                height: 70,
+                                                color: Colors.white,
+                                                padding: const EdgeInsets.all(
+                                                  4,
                                                 ),
-                                                color:
-                                                    Colors.black, // MÃ VẠCH ĐEN
+                                                child: BarcodeWidget(
+                                                  barcode: Barcode.code128(),
+                                                  data: product.batchId,
+                                                  drawText: true,
+                                                  style: const TextStyle(
+                                                    fontSize: 16,
+                                                    color: Colors.black,
+                                                  ),
+                                                  color: Colors.black,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          Center(
+                                            child: IconButton(
+                                              icon: const Icon(
+                                                Icons.download_rounded,
+                                                color: _accentColor,
+                                              ),
+                                              tooltip: "Tải Barcode",
+                                              onPressed: () => _saveBarcodePNG(
+                                                context,
+                                                barcodeKey,
+                                                product.batchId,
                                               ),
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    // Phần Trailing (Các nút thao tác)
                                     Column(
                                       mainAxisSize: MainAxisSize.min,
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.start,
                                       children: [
                                         IconButton(
                                           icon: const Icon(
@@ -352,39 +399,31 @@ class ProductManagementPage extends StatelessWidget {
                                             color: _accentColor,
                                             size: 26,
                                           ),
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
                                           tooltip: 'Chuyển Giao Sản Phẩm',
-                                          onPressed: () {
-                                            _showTransferProductModal(
-                                              context,
-                                              product,
-                                            );
-                                          },
+                                          onPressed: () =>
+                                              _showTransferProductModal(
+                                                context,
+                                                product,
+                                              ),
                                         ),
-                                        const SizedBox(
-                                          height: 10,
-                                        ), // Khoảng cách giữa hai nút
+                                        const SizedBox(height: 10),
                                         IconButton(
                                           icon: const Icon(
                                             Icons.info_outline,
                                             size: 26,
                                             color: Colors.white70,
                                           ),
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
                                           tooltip: 'Xem Chi Tiết',
-                                          onPressed: () {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  "Xem chi tiết sản phẩm... (Chức năng sắp ra mắt)",
+                                          onPressed: () =>
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    "Xem chi tiết sản phẩm... (Sắp ra mắt)",
+                                                  ),
                                                 ),
                                               ),
-                                            );
-                                          },
                                         ),
                                       ],
                                     ),
