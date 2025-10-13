@@ -1,10 +1,11 @@
-// dashboard/ui/scan_barcode_page.dart
+// lib/dashboard/ui/scan_barcode_page.dart
 // ignore_for_file: use_build_context_synchronously
 import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:untitled/dashboard/bloc/organization_bloc.dart';
 import 'package:untitled/dashboard/bloc/scan_bloc.dart';
 import 'package:untitled/dashboard/model/product.dart';
 import 'package:untitled/dashboard/model/productHistory.dart';
@@ -19,7 +20,6 @@ class ScanBarcodePage extends StatefulWidget {
 class _ScanBarcodePageState extends State<ScanBarcodePage> {
   late MobileScannerController _controller;
   String? _lastScannedCode;
-  // ✅ 1. Thêm TextEditingController để quản lý ô nhập liệu
   final TextEditingController _batchIdController = TextEditingController();
 
   @override
@@ -31,18 +31,67 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
   void _startNewScan() {
     setState(() {
       _lastScannedCode = null;
-      // ✅ 2. Xóa nội dung trong ô nhập liệu khi quét lại
       _batchIdController.clear();
     });
-    _controller.start(); // Bật lại camera để quét
+    // Reset lại ScanBloc về trạng thái ban đầu để có thể quét lại
+    context.read<ScanBloc>().add(ScanInitializeEvent());
+    _controller.start();
   }
 
   @override
   void dispose() {
     _controller.dispose();
-    // ✅ 3. Hủy controller để tránh rò rỉ bộ nhớ
     _batchIdController.dispose();
     super.dispose();
+  }
+
+  /// Hiển thị Dialog để người dùng nhập thông tin cập nhật
+  Future<void> _showUpdateDialog(Product product) async {
+    final descriptionController = TextEditingController();
+    final scanBloc = context.read<ScanBloc>();
+
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF243B55),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: const Text('Update Product Information',
+              style: TextStyle(color: Colors.white)),
+          content: TextField(
+            controller: descriptionController,
+            autofocus: true,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              hintText: 'Enter new description or note',
+              hintStyle: TextStyle(color: Colors.white54),
+              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white70)),
+              focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.greenAccent)),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent),
+              child: const Text('Submit', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              onPressed: () {
+                final desc = descriptionController.text.trim();
+                if (desc.isNotEmpty) {
+                  scanBloc.add(UpdateProductDescriptionEvent(
+                    batchId: product.batchId,
+                    description: desc,
+                  ));
+                  Navigator.of(dialogContext).pop();
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -54,100 +103,44 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
-          'Scan or Enter Product Code', // Cập nhật tiêu đề
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.1,
-          ),
-        ),
+        title: const Text('Scan or Enter Product Code', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: Container(
+        height: double.infinity,
+        width: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF141E30), Color(0xFF243B55)],
-          ),
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF141E30), Color(0xFF243B55)]),
         ),
-        child: BlocConsumer<ScanBloc, ScanState>(
-          listener: (context, state) {
-            if (state is ScanErrorState) {
-              ScaffoldMessenger.of(context)
-                ..hideCurrentSnackBar()
-                ..showSnackBar(
-                  SnackBar(
-                    content: Text("❌ ${state.error}"),
-                    backgroundColor: Colors.redAccent,
-                  ),
-                );
-            }
-          },
-          builder: (context, state) {
-            return Column(
-              children: [
-                // --- 1. Barcode Scanner ---
-                Container(
-                  padding: const EdgeInsets.only(top: 80),
-                  height: 300, // Giảm chiều cao một chút
-                  child: Stack(
-                    alignment: Alignment.center,
+        // Lồng 2 BlocBuilder để lấy state từ cả hai BLoC
+        child: BlocBuilder<OrganizationBloc, OrganizationState>(
+          builder: (context, orgState) {
+            return BlocConsumer<ScanBloc, ScanState>(
+              listener: (context, scanState) {
+                if (scanState is ScanErrorState) {
+                  ScaffoldMessenger.of(context)
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(SnackBar(
+                        content: Text("❌ ${scanState.error}"),
+                        backgroundColor: Colors.redAccent));
+                }
+              },
+              builder: (context, scanState) {
+                return SingleChildScrollView(
+                  child: Column(
                     children: [
-                      MobileScanner(
-                        controller: _controller,
-                        onDetect: (capture) {
-                          final code = capture.barcodes.first.rawValue;
-                          developer.log("✅ Barcode detected! Raw value: '$code'");
-                          if (code != null &&
-                              code.isNotEmpty &&
-                              _lastScannedCode != code) {
-                            developer.log("Processing new barcode: $code");
-                            setState(() => _lastScannedCode = code);
-                            _batchIdController.text = code; // Hiển thị code đã quét vào ô input
-                            scanBloc.add(BarcodeScannedEvent(code));
-                            _controller.stop(); // Dừng camera sau khi quét
-                          }
-                        },
+                      _buildScannerSection(scanBloc),
+                      _buildManualInputSection(scanBloc),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: _buildContent(context, scanState, orgState, scanBloc),
                       ),
-                      if (_lastScannedCode != null)
-                        Positioned(
-                          bottom: 20,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.greenAccent,
-                              foregroundColor: Colors.black,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 12,
-                              ),
-                            ),
-                            icon: const Icon(Icons.qr_code_scanner),
-                            label: const Text(
-                              "Scan / Clear",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            onPressed: _startNewScan,
-                          ),
-                        ),
                     ],
                   ),
-                ),
-
-                // ✅ 4. Thêm Widget cho việc nhập liệu thủ công
-                _buildManualInputSection(scanBloc),
-
-                // --- 2. Dữ liệu / trạng thái ---
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: _buildContent(context, state, scanBloc),
-                  ),
-                ),
-              ],
+                );
+              },
             );
           },
         ),
@@ -155,7 +148,57 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
-  // ✅ 5. Widget mới cho ô nhập liệu và nút tìm kiếm
+  /// Widget cho phần Scanner
+  Widget _buildScannerSection(ScanBloc scanBloc) {
+    return Container(
+      padding: const EdgeInsets.only(top: 80),
+      height: 300,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: MobileScanner(
+              controller: _controller,
+              onDetect: (capture) {
+                final code = capture.barcodes.first.rawValue;
+                if (code != null && code.isNotEmpty && _lastScannedCode != code) {
+                  setState(() => _lastScannedCode = code);
+                  _batchIdController.text = code;
+                  scanBloc.add(BarcodeScannedEvent(code));
+                  _controller.stop();
+                }
+              },
+            ),
+          ),
+          // Lớp phủ mờ và khung quét
+          Container(
+            decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.greenAccent.withOpacity(0.7), width: 3)
+            ),
+          ),
+          if (_lastScannedCode != null)
+            Positioned(
+              bottom: 20,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.greenAccent,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                ),
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text("Scan / Clear", style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: _startNewScan,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Widget cho phần nhập liệu thủ công
   Widget _buildManualInputSection(ScanBloc scanBloc) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
@@ -169,33 +212,24 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
                 hintText: 'Or enter Batch ID here',
                 hintStyle: const TextStyle(color: Colors.white54),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Colors.white38),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Colors.greenAccent, width: 2),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.white38)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.white38)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.greenAccent, width: 2)),
               ),
             ),
           ),
           const SizedBox(width: 10),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.greenAccent,
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              padding: const EdgeInsets.all(16),
+                backgroundColor: Colors.greenAccent,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.all(16)
             ),
             onPressed: () {
               final batchId = _batchIdController.text.trim();
               if (batchId.isNotEmpty) {
-                // Ẩn bàn phím
                 FocusScope.of(context).unfocus();
-                // Cập nhật state và gửi event
                 setState(() => _lastScannedCode = batchId);
                 scanBloc.add(BarcodeScannedEvent(batchId));
               }
@@ -207,260 +241,169 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
-  // ====================================================================
-  //                         BUILDER FUNCTIONS
-  // ====================================================================
-
-  Widget _buildContent(BuildContext context, ScanState state, ScanBloc bloc) {
-    // ... (Không có thay đổi gì trong hàm này)
-    if (state is ScanLoadingState || state is ProductHistoryLoadingState) {
-      return const Center(
+  /// Widget cho phần hiển thị nội dung chính
+  Widget _buildContent(BuildContext context, ScanState scanState, OrganizationState orgState, ScanBloc bloc) {
+    if (scanState is ScanLoadingState || scanState is ProductHistoryLoadingState) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.all(32.0),
         child: CircularProgressIndicator(color: Colors.greenAccent),
+      ));
+    }
+
+    if (scanState is ScanInitialState || scanState is ScanErrorState) {
+      return Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Center(
+            child: Text(
+                scanState is ScanErrorState ? "Error: ${scanState.error}\nPlease scan again." : "Scan a barcode or enter an ID to search.",
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 16))),
       );
     }
 
-    if (state is ScanInitialState || state is ScanErrorState) {
-      final message = state is ScanErrorState
-          ? "Error: ${state.error}\nPlease scan again."
-          : "Point the camera at a barcode or enter an ID to search.";
-
-      return Center(
-        child: Text(
-          message,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.white70, fontSize: 16),
-        ),
-      );
-    }
-
-    if (state is ProductInfoLoadedState) {
-      final product = state.product;
-      final history = state.history;
-
+    if (scanState is ProductInfoLoadedState) {
       return RefreshIndicator(
         color: Colors.greenAccent,
-        onRefresh: () async {
-          bloc.add(BarcodeScannedEvent(product.batchId));
-        },
-        child: ListView(
+        backgroundColor: const Color(0xFF243B55),
+        onRefresh: () async => bloc.add(BarcodeScannedEvent(scanState.product.batchId)),
+        child: Column( // Sử dụng Column thay vì ListView để tránh lỗi scroll lồng nhau
           children: [
-            _buildProductHeader(context, product),
+            _buildProductHeader(context, scanState.product),
             const SizedBox(height: 20),
-            _buildHistorySection(context, product, history, state, bloc),
-
-            if (state.historyErrorMessage != null)
+            _buildActionAndHistorySection(context, scanState, orgState, bloc),
+            if (scanState.historyErrorMessage != null)
               Padding(
                 padding: const EdgeInsets.only(top: 10),
-                child: Text(
-                  state.historyErrorMessage!,
-                  style: const TextStyle(
-                    color: Colors.redAccent,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+                child: Text(scanState.historyErrorMessage!, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
               ),
           ],
         ),
       );
     }
-
-    return const Center(child: Text("Loading data..."));
+    return const SizedBox.shrink(); // Trả về widget trống nếu không có state nào khớp
   }
 
+  /// Widget hiển thị thông tin sản phẩm
   Widget _buildProductHeader(BuildContext context, Product product) {
-    // ... (Không có thay đổi gì trong hàm này)
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.greenAccent.withOpacity(0.6),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        border: Border.all(color: Colors.greenAccent.withOpacity(0.6), width: 1.2),
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            product.name,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text(product.name, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
           const Divider(color: Colors.white38, height: 25),
-          _infoRow('Batch ID', product.batchId,
-              isAddress: true, context: context),
+          _infoRow('Batch ID', product.batchId, isAddress: true, context: context),
           _infoRow('Organization', product.organizationName),
-          _infoRow(
-            'Date Created',
-            DateTime.fromMillisecondsSinceEpoch(
-              product.date.toInt() * 1000,
-            ).toLocal().toString().split(' ')[0],
-          ),
-          _infoRow('Current Owner', product.currentOwner,
-              isAddress: true, context: context),
+          _infoRow('Date Created', DateTime.fromMillisecondsSinceEpoch(product.date.toInt() * 1000).toLocal().toString().split(' ')[0]),
+          _infoRow('Current Owner', product.currentOwner, isAddress: true, context: context),
         ],
       ),
     );
   }
 
-  Widget _buildHistorySection(
-      BuildContext context,
-      Product product,
-      List<ProductHistory>? history,
-      ProductInfoLoadedState state,
-      ScanBloc bloc,
-      ) {
-    // ... (Không có thay đổi gì trong hàm này)
-    if (state is! ProductDetailsLoadedState) {
+  /// Widget cho các nút Action (Update, View History) và danh sách History
+  Widget _buildActionAndHistorySection(BuildContext context, ProductInfoLoadedState scanState, OrganizationState orgState, ScanBloc bloc) {
+    // Logic kiểm tra quyền cập nhật
+    bool canUpdate = false;
+    if (orgState is OrganizationLoaded) {
+      canUpdate = scanState.product.organizationName == orgState.organization.organizationName;
+    }
+
+    // Nếu chưa xem lịch sử -> hiển thị các nút action
+    if (scanState is! ProductDetailsLoadedState) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.only(top: 20.0),
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.greenAccent.withOpacity(0.9),
-              foregroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+        child: Column(
+          children: [
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent.withOpacity(0.9), foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+              icon: const Icon(Icons.history, size: 20),
+              label: const Text("View Transaction History", style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () => bloc.add(FetchProductHistoryEvent(scanState.product.batchId)),
+            ),
+            const SizedBox(height: 15),
+            if (canUpdate)
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+                icon: const Icon(Icons.edit, size: 20),
+                label: const Text("Update Product Info", style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () => _showUpdateDialog(scanState.product),
               ),
-            ),
-            icon: const Icon(Icons.history, size: 20),
-            label: const Text(
-              "View Transaction History",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            onPressed: () {
-              bloc.add(FetchProductHistoryEvent(product.batchId));
-            },
-          ),
+          ],
         ),
       );
     }
 
+    // Nếu đã có lịch sử -> hiển thị danh sách lịch sử
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 30),
-        const Text(
-          "Transaction History",
-          style: TextStyle(
-            color: Colors.white70,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        const Text("Transaction History", style: TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 10),
-        if (history!.isEmpty)
-          const Text(
-            "No transactions have been recorded yet.",
-            style: TextStyle(color: Colors.white54),
-          )
+        if (scanState.history.isEmpty)
+          const Text("No transactions have been recorded yet.", style: TextStyle(color: Colors.white54))
         else
-          ...history.map((h) => _buildHistoryItemCard(h)).toList(),
+          ...scanState.history.map((h) => _buildHistoryItemCard(h)).toList(),
       ],
     );
   }
 
+  /// Widget cho một mục trong lịch sử giao dịch
   Widget _buildHistoryItemCard(ProductHistory h) {
-    // ... (Không có thay đổi gì trong hàm này)
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.08),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withOpacity(0.15)),
       ),
-      child: ListTile(
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        title: Text(
-          h.note,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.greenAccent,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            _historyDetailRow('From', h.from),
-            _historyDetailRow('To', h.to),
-            _historyDetailRow(
-              'Time',
-              DateTime.fromMillisecondsSinceEpoch(
-                h.timestamp.toInt() * 1000,
-              ).toLocal().toString(),
-            ),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(h.note, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.greenAccent, fontSize: 15)),
+          const SizedBox(height: 6),
+          _historyDetailRow('From', h.from),
+          _historyDetailRow('To', h.to),
+          _historyDetailRow('Time', h.dateTime.toString().split('.')[0]),
+        ],
       ),
     );
   }
 
-  Widget _infoRow(String title, String value,
-      {bool isAddress = false, BuildContext? context}) {
-    // ... (Không có thay đổi gì trong hàm này)
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
+  /// Helper widget để hiển thị một dòng thông tin sản phẩm
+  Widget _infoRow(String title, String value, {bool isAddress = false, BuildContext? context}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Expanded(flex: 3, child: Text("$title:", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white70))),
           Expanded(
-            flex: 2,
-            child: Text(
-              "$title:",
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.white70,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 4,
+            flex: 5,
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: isAddress ? 13 : 16,
-                      color: Colors.white,
-                      fontFamily: isAddress ? "monospace" : null,
-                    ),
-                    maxLines: isAddress ? 1 : 2,
-                    overflow: isAddress
-                        ? TextOverflow.ellipsis
-                        : TextOverflow.clip,
-                  ),
-                ),
-                if (isAddress && context != null)
-                  IconButton(
-                    icon: const Icon(
-                      Icons.copy,
-                      color: Colors.greenAccent,
-                      size: 18,
-                    ),
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: value));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('📋 Address copied to clipboard!'),
-                          duration: Duration(seconds: 1),
-                        ),
+                Expanded(child: Text(value, style: TextStyle(color: Colors.white, fontFamily: isAddress ? "monospace" : null), overflow: TextOverflow.ellipsis)),
+                if (isAddress)
+                // ✅ Bọc widget cần context trong một Builder
+                  Builder(
+                    builder: (builderContext) { // Sử dụng context mới này
+                      return GestureDetector(
+                        onTap: () {
+                          Clipboard.setData(ClipboardData(text: value));
+                          // ✅ Sử dụng builderContext để gọi ScaffoldMessenger
+                          ScaffoldMessenger.of(builderContext).showSnackBar(
+                            const SnackBar(
+                              content: Text('📋 Address copied to clipboard!'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                        child: const Icon(Icons.copy, color: Colors.greenAccent, size: 18),
                       );
                     },
                   ),
@@ -472,25 +415,14 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
+  /// Helper widget để hiển thị một dòng chi tiết trong lịch sử
   Widget _historyDetailRow(String title, String value) {
-    // ... (Không có thay đổi gì trong hàm này)
-    return Padding(
-      padding: const EdgeInsets.only(top: 2.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "$title: ",
-            style: const TextStyle(color: Colors.white54, fontSize: 13),
-          ),
-          Flexible(
-            child: Text(
-              value,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("$title: ", style: const TextStyle(color: Colors.white54, fontSize: 13)),
+        Flexible(child: Text(value, style: const TextStyle(color: Colors.white, fontSize: 13))),
+      ],
     );
   }
 }

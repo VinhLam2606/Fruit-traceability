@@ -21,6 +21,7 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
   DeployedContract? _deployedContract;
   ContractFunction? _getProductFunction;
   ContractFunction? _getProductHistoryFunction;
+  ContractFunction? _updateProductDescriptionFunction;
 
   ScanBloc({
     required this.web3client,
@@ -29,6 +30,7 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
     on<ScanInitializeEvent>(_onInitialize);
     on<BarcodeScannedEvent>(_onBarcodeScannedEvent);
     on<FetchProductHistoryEvent>(_onFetchProductHistoryEvent);
+    on<UpdateProductDescriptionEvent>(_onUpdateProductDescriptionEvent);
 
     add(ScanInitializeEvent());
   }
@@ -54,6 +56,7 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
 
       _getProductFunction = _deployedContract!.function('getProduct');
       _getProductHistoryFunction = _deployedContract!.function('getProductHistory');
+      _updateProductDescriptionFunction = _deployedContract!.function('updateProductDescription');
 
       developer.log("📌 ScanBloc Contract address loaded: $contractAddress");
 
@@ -157,6 +160,34 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
       emit(currentState.copyWith(
         historyErrorMessage: "❌ Lỗi tải lịch sử sản phẩm: ${e.toString()}",
       ));
+    }
+  }
+
+  FutureOr<void> _onUpdateProductDescriptionEvent(
+      UpdateProductDescriptionEvent event, Emitter<ScanState> emit) async {
+    if (state is! ProductInfoLoadedState) return;
+    final currentState = state as ProductInfoLoadedState;
+
+    emit(ProductHistoryLoadingState(
+        product: currentState.product, history: currentState.history));
+
+    try {
+      final txHash = await web3client.sendTransaction(
+        credentials,
+        Transaction.callContract(
+          contract: _deployedContract!,
+          function: _updateProductDescriptionFunction!,
+          parameters: [event.batchId, event.description],
+        ),
+        chainId: 1337,
+      );
+      developer.log("✅ Product info updated! TxHash: $txHash");
+      // Sau khi cập nhật thành công, tự động tải lại lịch sử để thấy thay đổi
+      add(FetchProductHistoryEvent(event.batchId));
+    } catch (e, st) {
+      developer.log("❌ [UpdateProduct] Failed", error: e, stackTrace: st);
+      emit(currentState.copyWith(
+          historyErrorMessage: "❌ Lỗi cập nhật: ${e.toString()}"));
     }
   }
 }
