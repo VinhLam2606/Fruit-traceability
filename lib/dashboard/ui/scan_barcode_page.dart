@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart'; // Import intl để sử dụng DateFormat
+import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:untitled/dashboard/bloc/organization_bloc.dart';
 import 'package:untitled/dashboard/bloc/scan_bloc.dart';
@@ -111,6 +111,24 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
         );
       },
     );
+  }
+
+  // --- HÀM MỚI: Chọn icon dựa trên nội dung ghi chú ---
+  IconData _getIconForHistoryNote(String note) {
+    final lowerNote = note.toLowerCase();
+    if (lowerNote.contains('create')) {
+      return Icons.factory_outlined; // Icon nhà máy
+    }
+    if (lowerNote.contains('transfer')) {
+      return Icons.local_shipping_outlined; // Icon xe tải
+    }
+    if (lowerNote.contains('receive')) {
+      return Icons.storefront_outlined; // Icon cửa hàng
+    }
+    if (lowerNote.contains('update')) {
+      return Icons.edit_note_outlined; // Icon chỉnh sửa
+    }
+    return Icons.info_outline; // Icon mặc định
   }
 
   @override
@@ -389,7 +407,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
             context: context,
           ),
           _infoRow('Organization', product.organizationName),
-          // --- THAY ĐỔI: Sử dụng DateFormat để hiển thị cả giờ và phút ---
           _infoRow(
             'Date Created',
             DateFormat('dd/MM/yyyy HH:mm').format(
@@ -466,6 +483,12 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
       );
     }
 
+    // --- THAY ĐỔI LỚN: Xây dựng giao diện TIMELINE thay vì danh sách thường ---
+    return _buildHistoryTimeline(scanState.history);
+  }
+
+  // --- WIDGET MỚI: Xây dựng toàn bộ dòng thời gian ---
+  Widget _buildHistoryTimeline(List<ProductHistory> history) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -477,45 +500,117 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 10),
-        if (scanState.history.isEmpty)
-          const Text(
-            "No transactions have been recorded yet.",
-            style: TextStyle(color: Colors.white54),
+        const SizedBox(height: 15),
+        if (history.isEmpty)
+          const Center(
+            child: Text(
+              "No transactions have been recorded yet.",
+              style: TextStyle(color: Colors.white54),
+            ),
           )
         else
-          ...scanState.history.map((h) => _buildHistoryItemCard(h)).toList(),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: history.length,
+            itemBuilder: (context, index) {
+              return _buildHistoryItemCard(
+                history[index],
+                index,
+                history.length,
+              );
+            },
+          ),
       ],
     );
   }
 
-  Widget _buildHistoryItemCard(ProductHistory h) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.15)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  // --- WIDGET ĐƯỢC VIẾT LẠI HOÀN TOÀN: Giao diện cho một mục trong timeline ---
+  Widget _buildHistoryItemCard(ProductHistory h, int index, int totalItems) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            h.note,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.greenAccent,
-              fontSize: 15,
+          // Phần 1: Cột Timeline (Icon và đường kẻ)
+          SizedBox(
+            width: 50,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Đường kẻ phía trên (trừ item đầu tiên)
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    color: index == 0
+                        ? Colors.transparent
+                        : Colors.white.withOpacity(0.3),
+                  ),
+                ),
+                // Icon ở giữa
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: Colors.greenAccent.withOpacity(0.8),
+                  child: Icon(
+                    _getIconForHistoryNote(h.note),
+                    color: Colors.black87,
+                    size: 24,
+                  ),
+                ),
+                // Đường kẻ phía dưới (trừ item cuối cùng)
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    color: index == totalItems - 1
+                        ? Colors.transparent
+                        : Colors.white.withOpacity(0.3),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 6),
-          _historyDetailRow('From', h.from),
-          _historyDetailRow('To', h.to),
-          // --- THAY ĐỔI: Sử dụng DateFormat để nhất quán và rõ ràng ---
-          _historyDetailRow(
-            'Time',
-            DateFormat('dd/MM/yyyy HH:mm:ss').format(h.dateTime.toLocal()),
+          const SizedBox(width: 10),
+          // Phần 2: Card chứa nội dung chi tiết
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withOpacity(0.15)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    h.note, // Tiêu đề hành động
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.greenAccent,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const Divider(color: Colors.white24, height: 16),
+                  _historyDetailRow('From', h.from),
+                  const SizedBox(height: 4),
+                  _historyDetailRow('To', h.to),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.bottomRight,
+                    child: Text(
+                      DateFormat(
+                        'dd/MM/yyyy HH:mm:ss',
+                      ).format(h.dateTime.toLocal()),
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
