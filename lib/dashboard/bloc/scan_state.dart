@@ -38,10 +38,10 @@ class ProductInfoLoadedState extends ScanState {
 
 final class ProductHistoryLoadingState extends ProductInfoLoadedState {
   ProductHistoryLoadingState({
-    required Product product,
-    List<ProductHistory>? history,
-    String? historyErrorMessage,
-  }) : super(product: product, history: history, historyErrorMessage: historyErrorMessage);
+    required super.product,
+    super.history,
+    super.historyErrorMessage,
+  });
 }
 
 class ProductDetailsLoadedState extends ProductInfoLoadedState {
@@ -49,8 +49,10 @@ class ProductDetailsLoadedState extends ProductInfoLoadedState {
   final List<ProductHistory> history;
 
   ProductDetailsLoadedState({
-    required Product product,
+    required super.product,
     required this.history,
-    String? historyErrorMessage,
-  }) : super(product: product, history: history, historyErrorMessage: historyErrorMessage);
+    super.historyErrorMessage,
+  }) : super(
+         history: history,
+       );
 }
