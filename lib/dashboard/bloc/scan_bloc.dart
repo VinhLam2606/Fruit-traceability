@@ -15,15 +15,22 @@ part 'scan_state.dart';
 
 class ScanBloc extends Bloc<ScanEvent, ScanState> {
   final Web3Client web3client;
+  final EthPrivateKey credentials;
+
 
   DeployedContract? _deployedContract;
   ContractFunction? _getProductFunction;
   ContractFunction? _getProductHistoryFunction;
+  ContractFunction? _updateProductDescriptionFunction;
 
-  ScanBloc({required this.web3client}) : super(ScanInitialState()) {
+  ScanBloc({
+    required this.web3client,
+    required this.credentials
+  }) : super(ScanInitialState()) {
     on<ScanInitializeEvent>(_onInitialize);
     on<BarcodeScannedEvent>(_onBarcodeScannedEvent);
     on<FetchProductHistoryEvent>(_onFetchProductHistoryEvent);
+    on<UpdateProductDescriptionEvent>(_onUpdateProductDescriptionEvent);
 
     add(ScanInitializeEvent());
   }
@@ -49,6 +56,7 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
 
       _getProductFunction = _deployedContract!.function('getProduct');
       _getProductHistoryFunction = _deployedContract!.function('getProductHistory');
+      _updateProductDescriptionFunction = _deployedContract!.function('updateProductDescription');
 
       developer.log("📌 ScanBloc Contract address loaded: $contractAddress");
 
@@ -122,11 +130,14 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
     ));
 
     try {
-      // Gọi getProductHistory(batchId)
+      // ✅ SỬA ĐỔI TẠI ĐÂY: Thêm `from: credentials.address`
+      // This ensures `msg.sender` is set for the contract call, allowing it
+      // to check if the user is registered.
       final result = await web3client.call(
         contract: deployedContract,
         function: getProductHistoryFunction,
         params: [event.batchId],
+        sender: credentials.address,
       );
 
       final rawHistory = result.first as List;
@@ -149,6 +160,34 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
       emit(currentState.copyWith(
         historyErrorMessage: "❌ Lỗi tải lịch sử sản phẩm: ${e.toString()}",
       ));
+    }
+  }
+
+  FutureOr<void> _onUpdateProductDescriptionEvent(
+      UpdateProductDescriptionEvent event, Emitter<ScanState> emit) async {
+    if (state is! ProductInfoLoadedState) return;
+    final currentState = state as ProductInfoLoadedState;
+
+    emit(ProductHistoryLoadingState(
+        product: currentState.product, history: currentState.history));
+
+    try {
+      final txHash = await web3client.sendTransaction(
+        credentials,
+        Transaction.callContract(
+          contract: _deployedContract!,
+          function: _updateProductDescriptionFunction!,
+          parameters: [event.batchId, event.description],
+        ),
+        chainId: 1337,
+      );
+      developer.log("✅ Product info updated! TxHash: $txHash");
+      // Sau khi cập nhật thành công, tự động tải lại lịch sử để thấy thay đổi
+      add(FetchProductHistoryEvent(event.batchId));
+    } catch (e, st) {
+      developer.log("❌ [UpdateProduct] Failed", error: e, stackTrace: st);
+      emit(currentState.copyWith(
+          historyErrorMessage: "❌ Lỗi cập nhật: ${e.toString()}"));
     }
   }
 }

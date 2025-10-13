@@ -282,9 +282,8 @@ class _CreateProductViewState extends State<CreateProductView> {
 
     for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
       final start = pageIndex * totalPerPage;
-      final end = (start + totalPerPage > products.length)
-          ? products.length
-          : start + totalPerPage;
+      final end =
+      (start + totalPerPage > products.length) ? products.length : start + totalPerPage;
 
       final pageProducts = products.sublist(start, end);
 
@@ -398,8 +397,8 @@ class _CreateProductViewState extends State<CreateProductView> {
                 onPressed: isLoading
                     ? null
                     : () {
-                        context.read<DashboardBloc>().add(FetchProductsEvent());
-                      },
+                  context.read<DashboardBloc>().add(FetchProductsEvent());
+                },
               ),
             ],
           ),
