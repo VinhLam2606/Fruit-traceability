@@ -3,6 +3,7 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -93,7 +94,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Future<void> initGanacheAdmin() async {
     const mnemonic =
-        "pave price banana physical legend soap road satisfy animal bench edge stem";
+        "impact sport page dice power fury simple pig sibling gate tiny gossip";
 
     try {
       final ganacheAccounts = await getGanacheAccounts();
@@ -270,16 +271,31 @@ class _RegisterPageState extends State<RegisterPage> {
     final username = usernameController.text.trim();
 
     try {
+      // 🧩 Step 1 — Check blockchain availability
       if (!await _isBlockchainAvailable()) {
         throw Exception("Không thể kết nối đến Ganache.");
       }
 
+      // 🧩 Step 2 — Register user in Firebase first
+      print("🔥 Registering Firebase account for $email...");
+      final userCred = await authService.value.createAccount(
+        email: email,
+        password: password,
+      );
+
+      print("✅ Firebase user created → ${userCred.user!.uid}");
+
+      // 🧩 Step 3 — Derive Ethereum credentials
       print("DEBUG private key: $providedPrivateKey");
 
       final credentials = EthPrivateKey.fromHex(providedPrivateKey);
       final walletAddress = EthereumAddress.fromHex(providedAddress);
-      print("🔎 Registering for $username ($accountType)...");
 
+      print(
+        "🔎 Preparing blockchain registration for $username ($accountType)...",
+      );
+
+      // 🧩 Step 4 — Check if wallet already registered on blockchain
       final alreadyExists = await _isUserAlreadyRegistered(walletAddress);
       if (alreadyExists) {
         throw Exception(
@@ -287,6 +303,7 @@ class _RegisterPageState extends State<RegisterPage> {
         );
       }
 
+      // 🧩 Step 5 — Register user on blockchain
       final regTx = await _registerOnBlockchain(
         username,
         email,
@@ -299,15 +316,11 @@ class _RegisterPageState extends State<RegisterPage> {
       if (accountType == "organization") {
         final orgTx = await _addOrganization("${username}_org", credentials);
         await _waitForTx(orgTx);
-        print("✅ Created organization for $username (role=Manufacturer)");
+        print("🏢 Created organization for $username (role=Manufacturer)");
         roleToSave = "Manufacturer";
       }
 
-      final userCred = await authService.value.createAccount(
-        email: email,
-        password: password,
-      );
-
+      // 🧩 Step 6 — Save full user info in Firestore
       await FirebaseFirestore.instance
           .collection("users")
           .doc(userCred.user!.uid)
@@ -324,19 +337,37 @@ class _RegisterPageState extends State<RegisterPage> {
             "createdAt": FieldValue.serverTimestamp(),
           });
 
-      print("🎉 Registration successful (role=$roleToSave)");
+      print("🎉 Registration successful (Firebase + Blockchain)");
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("✅ Đăng ký $roleToSave thành công!")),
+          SnackBar(
+            content: Text("✅ Đăng ký $roleToSave thành công!"),
+            duration: const Duration(seconds: 1),
+          ),
         );
+
+        await Future.delayed(const Duration(seconds: 1));
+
+        widget.onTap?.call();
       }
+    } on FirebaseAuthException catch (e) {
+      setState(() => errorMessage = e.message ?? "Firebase Auth error");
+      print("❌ FirebaseAuthException: $errorMessage");
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("❌ Lỗi Firebase: $errorMessage")));
     } catch (e) {
       setState(() => errorMessage = e.toString());
       print("❌ Lỗi đăng ký: $errorMessage");
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("❌ Lỗi đăng ký: $errorMessage")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("❌ Lỗi đăng ký: $errorMessage")));
+
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        await currentUser.delete();
+        print("🧹 Firebase user deleted due to blockchain failure.");
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -494,34 +525,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // 🔙 Back to Login button
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: widget.onTap,
-                        icon: const Icon(
-                          Icons.arrow_back,
-                          color: Colors.greenAccent,
-                        ),
-                        label: const Text(
-                          "Back to Login",
-                          style: TextStyle(
-                            color: Colors.greenAccent,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.greenAccent),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 25),
+        
 
                     Row(
                       children: const [
