@@ -31,8 +31,9 @@ class CreateProductView extends StatefulWidget {
 
 class _CreateProductViewState extends State<CreateProductView> {
   final TextEditingController nameController = TextEditingController();
-  final TextEditingController quantityController =
-  TextEditingController(text: '1');
+  final TextEditingController quantityController = TextEditingController(
+    text: '1',
+  );
   final ScrollController _scrollController = ScrollController();
 
   static const List<Color> _backgroundGradient = [
@@ -61,7 +62,6 @@ class _CreateProductViewState extends State<CreateProductView> {
   @override
   void dispose() {
     nameController.dispose();
-    dateController.dispose();
     quantityController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -138,7 +138,6 @@ class _CreateProductViewState extends State<CreateProductView> {
         ),
         const SizedBox(height: 16),
         TextField(
-          controller: dateController,
           style: const TextStyle(color: Colors.white),
           decoration: _inputDecoration('Date (Timestamp in seconds)'),
           keyboardType: TextInputType.number,
@@ -188,20 +187,20 @@ class _CreateProductViewState extends State<CreateProductView> {
                 ),
                 child: isLoading
                     ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    color: Colors.black,
-                    strokeWidth: 3,
-                  ),
-                )
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.black,
+                          strokeWidth: 3,
+                        ),
+                      )
                     : const Text(
-                  "Tạo & In PDF",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                        "Tạo & In PDF",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
             ),
           ],
@@ -211,9 +210,9 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 
   Future<void> _createProductsSequentially(
-      BuildContext context,
-      bool generatePdf,
-      ) async {
+    BuildContext context,
+    bool generatePdf,
+  ) async {
     final int quantity = int.tryParse(quantityController.text) ?? 1;
     final String baseName = nameController.text.trim();
 
@@ -283,8 +282,9 @@ class _CreateProductViewState extends State<CreateProductView> {
 
     for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
       final start = pageIndex * totalPerPage;
-      final end =
-      (start + totalPerPage > products.length) ? products.length : start + totalPerPage;
+      final end = (start + totalPerPage > products.length)
+          ? products.length
+          : start + totalPerPage;
 
       final pageProducts = products.sublist(start, end);
 
@@ -370,10 +370,10 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 
   Widget _buildProductList(
-      BuildContext context,
-      DashboardState state,
-      bool isLoading,
-      ) {
+    BuildContext context,
+    DashboardState state,
+    bool isLoading,
+  ) {
     final products = state is ProductsLoadedState
         ? state.products
         : <Product>[];
@@ -398,8 +398,8 @@ class _CreateProductViewState extends State<CreateProductView> {
                 onPressed: isLoading
                     ? null
                     : () {
-                  context.read<DashboardBloc>().add(FetchProductsEvent());
-                },
+                        context.read<DashboardBloc>().add(FetchProductsEvent());
+                      },
               ),
             ],
           ),
