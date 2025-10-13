@@ -34,8 +34,8 @@ class _RegisterPageState extends State<RegisterPage> {
   DeployedContract? usersContract;
 
   static const providedPrivateKey =
-      "0x87be8346b27253876e445b8205f85b32c03ab8d667bcc7923745e313f075143c";
-  static const providedAddress = "0x041aF649281D59DbAcF6eDb39447fc53E8E87ed5";
+      "0xeb665a5011ae5715777eab59df62e562ec24922ee0e69fd1a16c6547df27d2c6";
+  static const providedAddress = "0x5acF40A5dC8214AaEeB1ab988f5b31CD5D5Ec98d";
 
   @override
   void initState() {

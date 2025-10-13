@@ -27,7 +27,7 @@ class ProductManagementPage extends StatelessWidget {
     final dateTime = DateTime.fromMillisecondsSinceEpoch(
       timestamp.toInt() * 1000,
     );
-    return DateFormat('dd/MM/yyyy').format(dateTime);
+    return DateFormat('dd/MM/yyyy HH:mm').format(dateTime);
   }
 
   void _showCreateProductModal(BuildContext context) {

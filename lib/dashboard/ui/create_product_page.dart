@@ -31,6 +31,7 @@ class CreateProductView extends StatefulWidget {
 
 class _CreateProductViewState extends State<CreateProductView> {
   final TextEditingController nameController = TextEditingController();
+  // --- ĐÃ XÓA: dateController ---
   final TextEditingController quantityController = TextEditingController(
     text: '1',
   );
@@ -56,12 +57,14 @@ class _CreateProductViewState extends State<CreateProductView> {
     final dateTime = DateTime.fromMillisecondsSinceEpoch(
       timestamp.toInt() * 1000,
     );
-    return DateFormat('dd/MM/yyyy').format(dateTime);
+    // THAY ĐỔI: Thêm giờ và phút để hiển thị chính xác hơn
+    return DateFormat('dd/MM/yyyy HH:mm').format(dateTime);
   }
 
   @override
   void dispose() {
     nameController.dispose();
+    // --- ĐÃ XÓA: dateController.dispose() ---
     quantityController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -137,12 +140,7 @@ class _CreateProductViewState extends State<CreateProductView> {
           decoration: _inputDecoration('Product Name'),
         ),
         const SizedBox(height: 16),
-        TextField(
-          style: const TextStyle(color: Colors.white),
-          decoration: _inputDecoration('Date (Timestamp in seconds)'),
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 16),
+        // --- ĐÃ XÓA: TextField cho Date ---
         TextField(
           controller: quantityController,
           style: const TextStyle(color: Colors.white),
@@ -166,7 +164,7 @@ class _CreateProductViewState extends State<CreateProductView> {
                   ),
                 ),
                 child: const Text(
-                  "Tạo Sản Phẩm (Không in)",
+                  "Create Product (No Print)",
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -185,22 +183,10 @@ class _CreateProductViewState extends State<CreateProductView> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                child: isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.black,
-                          strokeWidth: 3,
-                        ),
-                      )
-                    : const Text(
-                        "Tạo & In PDF",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                child: const Text(
+                  "Create & Print PDF",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ],
@@ -214,6 +200,8 @@ class _CreateProductViewState extends State<CreateProductView> {
     bool generatePdf,
   ) async {
     final int quantity = int.tryParse(quantityController.text) ?? 1;
+    // --- THAY ĐỔI: Lấy thời gian hiện tại (timestamp in seconds) ---
+    final int currentTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final String baseName = nameController.text.trim();
 
     if (baseName.isEmpty || quantity <= 0) {
@@ -226,6 +214,8 @@ class _CreateProductViewState extends State<CreateProductView> {
       return;
     }
 
+    _showLoadingDialog(context);
+
     setState(() {
       _isProcessing = true;
       _createdProducts.clear();
@@ -236,15 +226,13 @@ class _CreateProductViewState extends State<CreateProductView> {
         final generatedBatchId = _generateBatchId();
         final name = quantity > 1 ? "$baseName #$i" : baseName;
 
-        // 🗓 Lấy ngày hiện tại (timestamp giây)
-        final int date = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-
         final product = Product(
           batchId: generatedBatchId,
           name: name,
           organizationName: "N/A",
           creator: "0x0000000000000000000000000000000000000000",
-          date: BigInt.from(date),
+          // --- THAY ĐỔI: Sử dụng timestamp hiện tại ---
+          date: BigInt.from(currentTimestamp),
           currentOwner: "0x0000000000000000000000000000000000000000",
         );
 
@@ -254,7 +242,8 @@ class _CreateProductViewState extends State<CreateProductView> {
           CreateProductButtonPressedEvent(
             batchId: generatedBatchId,
             name: name,
-            date: date,
+            // --- THAY ĐỔI: Gửi timestamp hiện tại đi ---
+            date: currentTimestamp,
           ),
         );
 
@@ -266,9 +255,27 @@ class _CreateProductViewState extends State<CreateProductView> {
       }
 
       nameController.clear();
+      // --- ĐÃ XÓA: dateController.clear() ---
       quantityController.text = '1';
     } finally {
+      _hideLoadingDialog(context);
       setState(() => _isProcessing = false);
+    }
+  }
+
+  // 🌀 POPUP LOADING
+  void _showLoadingDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      builder: (_) => const CustomLoadingDialog(),
+    );
+  }
+
+  void _hideLoadingDialog(BuildContext context) {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
     }
   }
 
@@ -282,8 +289,9 @@ class _CreateProductViewState extends State<CreateProductView> {
 
     for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
       final start = pageIndex * totalPerPage;
-      final end =
-      (start + totalPerPage > products.length) ? products.length : start + totalPerPage;
+      final end = (start + totalPerPage > products.length)
+          ? products.length
+          : start + totalPerPage;
 
       final pageProducts = products.sublist(start, end);
 
@@ -374,7 +382,8 @@ class _CreateProductViewState extends State<CreateProductView> {
     bool isLoading,
   ) {
     final products = state is ProductsLoadedState
-        ? state.products
+        ? state.products.reversed
+              .toList() // Hiển thị sản phẩm mới nhất lên đầu
         : <Product>[];
 
     return Expanded(
@@ -397,8 +406,8 @@ class _CreateProductViewState extends State<CreateProductView> {
                 onPressed: isLoading
                     ? null
                     : () {
-                  context.read<DashboardBloc>().add(FetchProductsEvent());
-                },
+                        context.read<DashboardBloc>().add(FetchProductsEvent());
+                      },
               ),
             ],
           ),
@@ -493,6 +502,59 @@ class _CreateProductViewState extends State<CreateProductView> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class CustomLoadingDialog extends StatelessWidget {
+  const CustomLoadingDialog({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    const Color accentColor = Colors.greenAccent;
+    const Color cardBackgroundColor = Color(0xFF243B55);
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: cardBackgroundColor.withOpacity(0.95),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: accentColor.withOpacity(0.3)),
+          ),
+          child: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 80,
+                    height: 80,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 5,
+                      valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                    ),
+                  ),
+                  Icon(Icons.inventory_2, color: accentColor, size: 40),
+                ],
+              ),
+              SizedBox(height: 20),
+              Text(
+                'Creating Products...',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
