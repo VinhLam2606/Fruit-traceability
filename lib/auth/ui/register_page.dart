@@ -6,8 +6,10 @@ import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:http/http.dart';
+import 'package:hd_wallet_kit/hd_wallet_kit.dart';
+import 'package:http/http.dart' as http;
 import 'package:untitled/auth/service/auth_service.dart';
+import 'package:untitled/auth/service/walletExt_service.dart';
 import 'package:web3dart/crypto.dart' as crypto;
 import 'package:web3dart/web3dart.dart';
 
@@ -33,14 +35,15 @@ class _RegisterPageState extends State<RegisterPage> {
   late Web3Client ethClient;
   DeployedContract? usersContract;
 
-  static const providedPrivateKey =
-      "0x38276ef1a155d53357a3fbae1ea3e0e962977a120c566c29c96dea90e45d62ad";
-  static const providedAddress = "0xc8E088c822A779760cc3466D41CF6F00973bC8e7";
+  static String providedPrivateKey = "";
+  static String providedAddress = "";
+  static int nextAccountIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    ethClient = Web3Client("http://10.0.2.2:7545", Client());
+    ethClient = Web3Client("http://10.0.2.2:7545", http.Client());
+    initGanacheAdmin();
     _loadContract();
   }
 
@@ -51,6 +54,107 @@ class _RegisterPageState extends State<RegisterPage> {
     confirmPasswordController.dispose();
     usernameController.dispose();
     super.dispose();
+  }
+
+  Future<List<String>> getGanacheAccounts() async {
+    final res = await http.post(
+      Uri.parse("http://10.0.2.2:7545"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "jsonrpc": "2.0",
+        "method": "eth_accounts",
+        "params": [],
+        "id": 1,
+      }),
+    );
+
+    final body = jsonDecode(res.body);
+    if (body["result"] != null) {
+      return List<String>.from(body["result"]);
+    }
+    return [];
+  }
+
+  String derivePrivateKeyFromMnemonic(String mnemonic, {int accountIndex = 0}) {
+    // 1) words -> seed
+    final words = mnemonic.trim().split(RegExp(r'\s+'));
+    final seed = Mnemonic.toSeed(words);
+
+    // 2) wallet -> child key theo BIP44 của ETH
+    final hdWallet = HDWallet.fromSeed(seed: seed);
+    final path = "m/44'/60'/0'/0/$accountIndex";
+    final derivedKey = hdWallet.deriveChildKeyByPath(path); // dùng extension
+
+    // 3) private key -> hex
+    final hex0x = derivedKey.privateKeyHex0x; // dùng extension
+    print("✅ Derived private key (account $accountIndex): $hex0x");
+    return hex0x;
+  }
+
+  Future<void> initGanacheAdmin() async {
+    const mnemonic =
+        "impact sport page dice power fury simple pig sibling gate tiny gossip";
+
+    try {
+      final ganacheAccounts = await getGanacheAccounts();
+      if (ganacheAccounts.isEmpty) {
+        throw Exception("Ganache RPC returned no accounts.");
+      }
+
+      // 🔹 Start with next available user index
+      final userCountSnap = await FirebaseFirestore.instance
+          .collection("users")
+          .get();
+      int accountIndex = userCountSnap.docs.length % 10;
+
+      // 🔁 Loop through available Ganache-derived accounts (0–9)
+      for (int i = 0; i < 10; i++) {
+        final derivedIndex = (accountIndex + i) % 10;
+
+        // Derive private key & address
+        providedPrivateKey = derivePrivateKeyFromMnemonic(
+          mnemonic,
+          accountIndex: derivedIndex,
+        );
+
+        final ethKey = EthPrivateKey.fromHex(providedPrivateKey);
+        final derivedAddress = await ethKey.extractAddress();
+        providedAddress = derivedAddress.hex;
+
+        // Check balance
+        final balance = await ethClient.getBalance(derivedAddress);
+        final ether = balance.getInEther;
+
+        // Skip if no funds
+        if (ether == BigInt.zero) {
+          print("⚪ Skipping Account #$derivedIndex → $providedAddress (0 ETH)");
+          continue;
+        }
+
+        // 🔍 Check if already registered on blockchain
+        final alreadyRegistered = await _isUserAlreadyRegistered(
+          EthereumAddress.fromHex(providedAddress),
+        );
+
+        if (!alreadyRegistered) {
+          // ✅ Found available funded & unregistered account
+          nextAccountIndex = derivedIndex;
+          print("🟢 Selected new Ganache Account #$nextAccountIndex");
+          print("🔐 Private Key: $providedPrivateKey");
+          print("📮 Derived Address: $providedAddress");
+          print("💰 Balance: $ether ETH");
+          return;
+        } else {
+          print(
+            "🚫 Account #$derivedIndex already registered on-chain. Skipping...",
+          );
+        }
+      }
+
+      throw Exception("No funded & unregistered Ganache accounts available!");
+    } catch (e) {
+      print("❌ Failed to init Ganache admin: $e");
+    }
   }
 
   Future<void> _loadContract() async {
@@ -70,6 +174,26 @@ class _RegisterPageState extends State<RegisterPage> {
       print("✅ Chain contract loaded at $contractAddr");
     } catch (e) {
       print("⚠️ Failed to load contract: $e");
+    }
+  }
+
+  Future<bool> _isUserAlreadyRegistered(EthereumAddress walletAddress) async {
+    try {
+      if (usersContract == null) throw Exception("Contract not loaded");
+
+      final fn = usersContract!.function("isRegisteredAuth");
+
+      final result = await ethClient.call(
+        contract: usersContract!,
+        function: fn,
+        params: [walletAddress],
+      );
+
+      // Solidity bool → List<dynamic> → [true/false]
+      return result.isNotEmpty && result.first == true;
+    } catch (e) {
+      print("⚠️ Failed to check user registration: $e");
+      return false;
     }
   }
 
@@ -150,9 +274,18 @@ class _RegisterPageState extends State<RegisterPage> {
         throw Exception("Không thể kết nối đến Ganache.");
       }
 
+      print("DEBUG private key: $providedPrivateKey");
+
       final credentials = EthPrivateKey.fromHex(providedPrivateKey);
       final walletAddress = EthereumAddress.fromHex(providedAddress);
       print("🔎 Registering for $username ($accountType)...");
+
+      final alreadyExists = await _isUserAlreadyRegistered(walletAddress);
+      if (alreadyExists) {
+        throw Exception(
+          "This wallet address is already registered on blockchain!",
+        );
+      }
 
       final regTx = await _registerOnBlockchain(
         username,
