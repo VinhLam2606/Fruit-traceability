@@ -85,10 +85,25 @@ contract Products is Users {
         if (p.currentOwner != msg.sender) revert NotOwner();
 
         address from = p.currentOwner;
+
+        // 1) Cập nhật owner
         p.currentOwner = to;
+
+        // 2) Nếu recipient thuộc 1 organization, cập nhật organizationName của product
+        address recipientOrgOwner = memberToOrganizationOwner[to];
+        if (recipientOrgOwner != address(0)) {
+            string memory newOrgName = organizations[recipientOrgOwner].organizationName;
+            if (bytes(newOrgName).length != 0) {
+                p.organizationName = newOrgName;
+            }
+        }
+        // nếu recipient không thuộc org nào, giữ nguyên organizationName hiện tại (hoặc bạn có thể clear nếu muốn)
+
+        // 3) Cập nhật bảng owner => indices
         userOwnedProductIndices.removeProductIndexFromUser(from, idx);
         userOwnedProductIndices[to].push(idx);
 
+        // 4) Lưu lịch sử và emit event
         productHistories.addProductHistory(batchId, from, to, "Transferred");
         emit ProductTransferred(batchId, from, to, block.timestamp);
     }

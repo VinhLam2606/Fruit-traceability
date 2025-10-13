@@ -10,8 +10,8 @@ class OrganizationManagementPage extends StatelessWidget {
 
   // --- Style constants ---
   static const List<Color> _backgroundGradient = [
-    Color(0xFF141E30), // Tối hơn
-    Color(0xFF243B55), // Sáng hơn một chút
+    Color(0xFF141E30), // Darker
+    Color(0xFF243B55), // Lighter
   ];
   static const Color _accentColor = Colors.greenAccent;
   static const Color _cardColor = Colors.white10;
@@ -19,7 +19,7 @@ class OrganizationManagementPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      // Áp dụng gradient nền cho toàn bộ trang
+      // Apply background gradient to the whole page
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -28,13 +28,12 @@ class OrganizationManagementPage extends StatelessWidget {
         ),
       ),
       child: Scaffold(
-        backgroundColor:
-            Colors.transparent, // Rất quan trọng để hiển thị gradient
+        backgroundColor: Colors.transparent, // Crucial for showing the gradient
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           title: const Text(
-            "Quản Lý Tổ Chức",
+            "Organization Management", // Translated
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           iconTheme: const IconThemeData(color: Colors.white),
@@ -48,17 +47,17 @@ class OrganizationManagementPage extends StatelessWidget {
                   backgroundColor: _accentColor,
                 ),
               );
-              // Kích hoạt fetch ngay sau khi hành động thành công
+              // Trigger a fetch right after a successful action
               context.read<OrganizationBloc>().add(FetchOrganizationDetails());
             }
-            // ✅ Hiển thị dialog lỗi
+            // ✅ Display error dialog
             else if (state is OrganizationError) {
               showDialog(
                 context: context,
                 builder: (_) => AlertDialog(
                   backgroundColor: const Color(0xFF243B55),
                   title: const Text(
-                    "Lỗi Thao Tác",
+                    "Action Error", // Translated
                     style: TextStyle(color: _accentColor),
                   ),
                   content: Text(
@@ -86,19 +85,19 @@ class OrganizationManagementPage extends StatelessWidget {
             }
           },
           builder: (context, state) {
-            // 🔹 Nếu đang loading
+            // 🔹 If loading
             if (state is OrganizationLoading) {
               return const Center(
                 child: CircularProgressIndicator(color: _accentColor),
               );
             }
 
-            // 🔹 Nếu đã load được tổ chức
+            // 🔹 If organization is loaded
             if (state is OrganizationLoaded) {
               return _buildLoadedView(context, state);
             }
 
-            // 🔹 Nếu có lỗi trong lần đầu load
+            // 🔹 If there's an error on initial load
             if (state is OrganizationError) {
               return Center(
                 child: Column(
@@ -107,7 +106,7 @@ class OrganizationManagementPage extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.all(24.0),
                       child: Text(
-                        "Lỗi tải dữ liệu:\n${state.error}",
+                        "Error loading data:\n${state.error}", // Translated
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.redAccent,
@@ -124,13 +123,11 @@ class OrganizationManagementPage extends StatelessWidget {
                       },
                       icon: const Icon(Icons.refresh, color: Colors.black),
                       label: const Text(
-                        "Thử lại",
+                        "Retry", // Translated
                         style: TextStyle(color: Colors.black),
                       ),
                       style: ElevatedButton.styleFrom(
-                        // Đã sửa: Thay 'primary' bằng 'backgroundColor'
                         backgroundColor: _accentColor,
-                        // Đã sửa: Thay 'onPrimary' bằng 'foregroundColor'
                         foregroundColor: Colors.black,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -148,7 +145,7 @@ class OrganizationManagementPage extends StatelessWidget {
 
             return const Center(
               child: Text(
-                "Đang khởi tạo...",
+                "Initializing...", // Translated
                 style: TextStyle(color: Colors.white70),
               ),
             );
@@ -224,7 +221,7 @@ class OrganizationManagementPage extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
-              "Thành Viên",
+              "Members", // Translated
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 20,
@@ -243,7 +240,7 @@ class OrganizationManagementPage extends StatelessWidget {
                 child: Padding(
                   padding: EdgeInsets.only(top: 20.0),
                   child: Text(
-                    "Chưa có thành viên nào.",
+                    "No members yet.", // Translated
                     style: TextStyle(color: Colors.white54),
                   ),
                 ),
@@ -272,17 +269,17 @@ class OrganizationManagementPage extends StatelessWidget {
                           size: 20,
                         ),
                       ),
-                      // ✅ Đảm bảo hiển thị TÊN người dùng, nếu không có thì hiển thị placeholder
+                      // ✅ Ensure user NAME is displayed, otherwise show a placeholder
                       title: Text(
                         member.userName.isNotEmpty
                             ? member.userName
-                            : "Người dùng (Chưa có tên)",
+                            : "User (Name not set)", // Translated
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      // Hiển thị Địa chỉ ví rút gọn làm phụ đề
+                      // Display shortened wallet address as subtitle
                       subtitle: Text(
                         member.userId.substring(0, 10) + "...",
                         style: const TextStyle(
@@ -319,7 +316,7 @@ class OrganizationManagementPage extends StatelessWidget {
     );
   }
 
-  /// 🔹 Thêm thành viên chỉ bằng Email
+  /// 🔹 Add member by Email only
   void _showAddMemberDialog(BuildContext context) {
     final TextEditingController emailController = TextEditingController();
 
@@ -332,7 +329,7 @@ class OrganizationManagementPage extends StatelessWidget {
             borderRadius: BorderRadius.circular(15),
           ),
           title: const Text(
-            "Thêm Thành Viên Mới",
+            "Add New Member", // Translated
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           content: TextField(
@@ -340,7 +337,7 @@ class OrganizationManagementPage extends StatelessWidget {
             keyboardType: TextInputType.emailAddress,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              labelText: "Email Thành Viên",
+              labelText: "Member's Email", // Translated
               labelStyle: const TextStyle(color: Colors.white70),
               hintText: "example@email.com",
               hintStyle: const TextStyle(color: Colors.white54),
@@ -358,7 +355,7 @@ class OrganizationManagementPage extends StatelessWidget {
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
               child: const Text(
-                "Hủy",
+                "Cancel", // Translated
                 style: TextStyle(color: Colors.redAccent),
               ),
             ),
@@ -368,7 +365,9 @@ class OrganizationManagementPage extends StatelessWidget {
                 if (email.isEmpty || !email.contains('@')) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text("⚠️ Vui lòng nhập địa chỉ email hợp lệ."),
+                      content: Text(
+                        "⚠️ Please enter a valid email address.",
+                      ), // Translated
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -380,15 +379,13 @@ class OrganizationManagementPage extends StatelessWidget {
                 Navigator.pop(dialogContext);
               },
               style: ElevatedButton.styleFrom(
-                // Đã sửa: Thay 'primary' bằng 'backgroundColor'
                 backgroundColor: _accentColor,
-                // Đã sửa: Thay 'onPrimary' bằng 'foregroundColor'
                 foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: const Text("Thêm"),
+              child: const Text("Add"), // Translated
             ),
           ],
         );

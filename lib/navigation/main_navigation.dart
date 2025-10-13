@@ -76,7 +76,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
               // ScanBloc giờ chỉ cần web3client
               BlocProvider<ScanBloc>(
                 create: (context) =>
-                    ScanBloc(web3client: dashboardBloc.web3client),
+                    ScanBloc(web3client: dashboardBloc.web3client, credentials: dashboardBloc.credentials),
               ),
             ],
             child: _buildScaffold(),

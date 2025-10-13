@@ -215,6 +215,19 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     }
   }
 
+  Future<void> createProductDirectly({
+    required String batchId,
+    required String name,
+    required int date,
+  }) async {
+    add(
+      CreateProductButtonPressedEvent(batchId: batchId, name: name, date: date),
+    );
+
+    // Đợi đến khi hoàn tất (nếu bạn có stream trạng thái)
+    await Future.delayed(const Duration(seconds: 10)); // tuỳ thời gian mạng
+  }
+
   FutureOr<void> _fetchProductsEvent(
     FetchProductsEvent event,
     Emitter<DashboardState> emit,

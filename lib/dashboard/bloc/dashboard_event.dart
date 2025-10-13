@@ -31,7 +31,6 @@ class TransferProductEvent extends DashboardEvent {
   });
 }
 
-// Event mới: đăng ký tổ chức và tạo sản phẩm
 class RegisterOrgAndCreateProductEvent extends DashboardEvent {
   final String orgName;
   final String batchId;

@@ -15,3 +15,13 @@ class FetchProductHistoryEvent extends ScanEvent {
   final String batchId;
   FetchProductHistoryEvent(this.batchId);
 }
+
+class UpdateProductDescriptionEvent extends ScanEvent {
+  final String batchId;
+  final String description;
+
+  UpdateProductDescriptionEvent({
+    required this.batchId,
+    required this.description,
+  });
+}

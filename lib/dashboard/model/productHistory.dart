@@ -1,3 +1,5 @@
+// productHistory.dart
+
 // ignore_for_file: file_names
 
 import 'package:web3dart/web3dart.dart';
@@ -24,12 +26,13 @@ class ProductHistory {
           "Dữ liệu hợp đồng lịch sử sản phẩm không hợp lệ");
     }
 
+    // ✅ SỬA LỖI: Đã cập nhật đúng thứ tự các trường để khớp với Types.sol
     return ProductHistory(
       batchId: contractData[0] as String,
       from: (contractData[1] as EthereumAddress).hex,
       to: (contractData[2] as EthereumAddress).hex,
-      note: contractData[3] as String,
-      timestamp: contractData[4] as BigInt,
+      timestamp: contractData[3] as BigInt, // timestamp là phần tử thứ 4 (index 3)
+      note: contractData[4] as String,      // note là phần tử thứ 5 (index 4)
     );
   }
 
