@@ -15,12 +15,17 @@ part 'scan_state.dart';
 
 class ScanBloc extends Bloc<ScanEvent, ScanState> {
   final Web3Client web3client;
+  final EthPrivateKey credentials;
+
 
   DeployedContract? _deployedContract;
   ContractFunction? _getProductFunction;
   ContractFunction? _getProductHistoryFunction;
 
-  ScanBloc({required this.web3client}) : super(ScanInitialState()) {
+  ScanBloc({
+    required this.web3client,
+    required this.credentials
+  }) : super(ScanInitialState()) {
     on<ScanInitializeEvent>(_onInitialize);
     on<BarcodeScannedEvent>(_onBarcodeScannedEvent);
     on<FetchProductHistoryEvent>(_onFetchProductHistoryEvent);
@@ -122,11 +127,14 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
     ));
 
     try {
-      // Gọi getProductHistory(batchId)
+      // ✅ SỬA ĐỔI TẠI ĐÂY: Thêm `from: credentials.address`
+      // This ensures `msg.sender` is set for the contract call, allowing it
+      // to check if the user is registered.
       final result = await web3client.call(
         contract: deployedContract,
         function: getProductHistoryFunction,
         params: [event.batchId],
+        sender: credentials.address,
       );
 
       final rawHistory = result.first as List;

@@ -65,7 +65,7 @@ class AuthLayout extends StatelessWidget {
         } else if (accountType == "user") {
           // 👤 Customer → Cung cấp ScanBloc, sau đó tải contract cho CustomerNavigationPage
           return BlocProvider<ScanBloc>(
-            create: (_) => ScanBloc(web3client: web3client),
+            create: (_) => ScanBloc(web3client: web3client, credentials: credentials),
             child: FutureBuilder<DeployedContract>(
               future: _loadChainContract(context),
               builder: (context, snapshot) {

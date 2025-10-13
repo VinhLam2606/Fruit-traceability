@@ -61,7 +61,6 @@ class _CreateProductViewState extends State<CreateProductView> {
   @override
   void dispose() {
     nameController.dispose();
-    dateController.dispose();
     quantityController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -135,13 +134,6 @@ class _CreateProductViewState extends State<CreateProductView> {
           controller: nameController,
           style: const TextStyle(color: Colors.white),
           decoration: _inputDecoration('Product Name'),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: dateController,
-          style: const TextStyle(color: Colors.white),
-          decoration: _inputDecoration('Date (Timestamp in seconds)'),
-          keyboardType: TextInputType.number,
         ),
         const SizedBox(height: 16),
         TextField(
