@@ -5,7 +5,6 @@ import 'dart:developer' as developer;
 
 import 'package:bloc/bloc.dart';
 import 'package:flutter/services.dart';
-// Đảm bảo đường dẫn import Product và ProductHistory là chính xác
 import 'package:untitled/dashboard/model/product.dart';
 import 'package:untitled/dashboard/model/productHistory.dart';
 import 'package:web3dart/web3dart.dart';
@@ -35,7 +34,6 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
     add(ScanInitializeEvent());
   }
 
-  /// Xử lý Event khởi tạo Bloc và tải Contract ABI/Address.
   FutureOr<void> _onInitialize(
       ScanInitializeEvent event, Emitter<ScanState> emit) async {
     try {
@@ -62,7 +60,7 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
 
     } catch (e, st) {
       developer.log("❌ [Init] ScanBloc error: $e", stackTrace: st);
-      emit(ScanErrorState("Lỗi khởi tạo contract: ${e.toString()}"));
+      emit(ScanErrorState("Không thể tải thông tin hệ thống. Vui lòng kiểm tra kết nối và thử lại."));
     }
   }
 
@@ -82,7 +80,6 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
       final deployedContract = _deployedContract!;
       final getProductFunction = _getProductFunction!;
 
-      // 1. Gọi getProduct(batchId)
       final result = await web3client.call(
         contract: deployedContract,
         function: getProductFunction,
@@ -102,11 +99,10 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
 
     } catch (e, st) {
       developer.log("❌ [GetProduct] Failed", error: e, stackTrace: st);
-      emit(ScanErrorState("❌ Lỗi lấy thông tin sản phẩm: ${e.toString()}"));
+      emit(ScanErrorState("❌ Không thể lấy thông tin sản phẩm. Vui lòng quét lại mã."));
     }
   }
 
-  /// Xử lý sự kiện nhấn nút chi tiết: Gọi getProductHistory.
   FutureOr<void> _onFetchProductHistoryEvent(
       FetchProductHistoryEvent event,
       Emitter<ScanState> emit,
@@ -130,9 +126,6 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
     ));
 
     try {
-      // ✅ SỬA ĐỔI TẠI ĐÂY: Thêm `from: credentials.address`
-      // This ensures `msg.sender` is set for the contract call, allowing it
-      // to check if the user is registered.
       final result = await web3client.call(
         contract: deployedContract,
         function: getProductHistoryFunction,
@@ -158,7 +151,7 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
       developer.log("❌ [GetProductHistory] Failed", error: e, stackTrace: st);
 
       emit(currentState.copyWith(
-        historyErrorMessage: "❌ Lỗi tải lịch sử sản phẩm: ${e.toString()}",
+        historyErrorMessage: "❌ Không thể tải lịch sử sản phẩm. Vui lòng thử lại sau.",
       ));
     }
   }
@@ -182,12 +175,11 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
         chainId: 1337,
       );
       developer.log("✅ Product info updated! TxHash: $txHash");
-      // Sau khi cập nhật thành công, tự động tải lại lịch sử để thấy thay đổi
       add(FetchProductHistoryEvent(event.batchId));
     } catch (e, st) {
       developer.log("❌ [UpdateProduct] Failed", error: e, stackTrace: st);
       emit(currentState.copyWith(
-          historyErrorMessage: "❌ Lỗi cập nhật: ${e.toString()}"));
+          historyErrorMessage: "❌ Không thể cập nhật mô tả. Vui lòng kiểm tra quyền truy cập."));
     }
   }
 }

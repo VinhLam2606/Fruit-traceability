@@ -85,7 +85,6 @@ contract Users {
         return users[account];
     }
 
-    /// 👉 FIX: thêm hàm helper để Products.sol gọi
     function isRegisteredAuth(address account) public view returns (bool) {
         return userAuths[account].isRegistered;
     }
@@ -178,4 +177,16 @@ contract Users {
 
         emit AssociateRemoved(owner, associateToRemove, users[associateToRemove].userName);
     }
+
+    function areInSameOrganization(address accountA, address accountB) public view returns (bool) {
+            address orgA = memberToOrganizationOwner[accountA];
+            address orgB = memberToOrganizationOwner[accountB];
+
+            // Nếu một trong hai chưa thuộc tổ chức nào thì không thể cùng tổ chức
+            if (orgA == address(0) || orgB == address(0)) {
+                return false;
+            }
+            // ✅ Hai user cùng tổ chức nếu chủ tổ chức của họ giống nhau
+            return orgA == orgB;
+        }
 }

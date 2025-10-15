@@ -39,7 +39,6 @@ contract Products is Users {
     }
 
     // --- CORE ---
-    // THAY ĐỔI: Cập nhật chữ ký hàm để nhận một tham số 'date_'
     function addAProduct(
         string memory batchId,
         string memory name_,
@@ -55,13 +54,12 @@ contract Products is Users {
         string memory orgName = organizations[orgOwner].organizationName;
         if (bytes(orgName).length == 0) revert NotInOrg();
 
-        // THAY ĐỔI: Cập nhật việc khởi tạo Product
         Types.Product memory p = Types.Product({
             batchId: batchId,
             name: name_,
             organizationName: orgName,
             creator: msg.sender,
-            date: date_, // Sử dụng trường 'date' mới
+            date: date_,
             currentOwner: msg.sender
         });
 
@@ -82,14 +80,17 @@ contract Products is Users {
 
         uint256 idx = productIndexByBatchId[batchId];
         Types.Product storage p = products[idx];
+
+        // Chỉ người sở hữu hiện tại được quyền chuyển
         if (p.currentOwner != msg.sender) revert NotOwner();
 
-        address from = p.currentOwner;
+        address from = msg.sender;
+        address owner = p.currentOwner;
 
-        // 1) Cập nhật owner
+        // --- Chuyển sản phẩm ---
         p.currentOwner = to;
 
-        // 2) Nếu recipient thuộc 1 organization, cập nhật organizationName của product
+        // Nếu người nhận thuộc tổ chức, cập nhật organizationName
         address recipientOrgOwner = memberToOrganizationOwner[to];
         if (recipientOrgOwner != address(0)) {
             string memory newOrgName = organizations[recipientOrgOwner].organizationName;
@@ -97,13 +98,11 @@ contract Products is Users {
                 p.organizationName = newOrgName;
             }
         }
-        // nếu recipient không thuộc org nào, giữ nguyên organizationName hiện tại (hoặc bạn có thể clear nếu muốn)
 
-        // 3) Cập nhật bảng owner => indices
-        userOwnedProductIndices.removeProductIndexFromUser(from, idx);
+        // Cập nhật danh sách sở hữu
+        userOwnedProductIndices.removeProductIndexFromUser(owner, idx);
         userOwnedProductIndices[to].push(idx);
 
-        // 4) Lưu lịch sử và emit event
         productHistories.addProductHistory(batchId, from, to, "Transferred");
         emit ProductTransferred(batchId, from, to, block.timestamp);
     }
@@ -113,17 +112,19 @@ contract Products is Users {
         if (!users[msg.sender].isAlreadyInAnyOrganization) revert NotInOrg();
 
         Types.Product storage p = products[productIndexByBatchId[batchId]];
-        address productOrgOwner = memberToOrganizationOwner[p.creator];
+        address currentOwner = p.currentOwner;
+
+        address productOwnerOrgOwner = memberToOrganizationOwner[currentOwner];
         address updaterOrgOwner = memberToOrganizationOwner[msg.sender];
-        if (updaterOrgOwner != productOrgOwner) revert NotOrgMember();
+
+        bool sameOrg = (productOwnerOrgOwner != address(0) && updaterOrgOwner != address(0) && productOwnerOrgOwner == updaterOrgOwner);
+        if (msg.sender != currentOwner && !sameOrg) revert NotOrgMember();
 
         productHistories.addProductHistory(batchId, msg.sender, p.currentOwner, desc);
         emit ProductInfoUpdated(batchId, desc, msg.sender, block.timestamp);
     }
 
     // --- VIEW ---
-    // Các hàm view không cần thay đổi vì chúng trả về toàn bộ struct,
-    // và struct đã được cập nhật trong Types.sol
     function getProduct(string memory batchId) public view returns (Types.Product memory) {
         if (!batchIdExists[batchId]) revert BatchNotExist();
         return products[productIndexByBatchId[batchId]];
