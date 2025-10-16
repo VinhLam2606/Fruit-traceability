@@ -2,8 +2,11 @@
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:untitled/auth/service/auth_service.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../auth_layout.dart'; // 🔥 import để điều hướng về AuthLayout
+import '../bloc/auth_bloc.dart';
+import '../bloc/auth_event.dart';
+import '../bloc/auth_state.dart';
 
 class LoginPage extends StatefulWidget {
   final Function()? onTap;
@@ -33,21 +36,12 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      final userCred = await authService.value.signIn(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-      );
-
-      print("➡ Login success for: ${userCred.user!.email}");
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("✅ Welcome back!")));
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const AuthLayout()),
-        (route) => false,
+      // ✅ Instead of calling authService directly, trigger Bloc event
+      context.read<AuthBloc>().add(
+        AuthLoginRequested(
+          emailController.text.trim(),
+          passwordController.text.trim(),
+        ),
       );
     } catch (e) {
       setState(() => errorMessage = e.toString());
@@ -62,163 +56,195 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF141E30), Color(0xFF243B55)],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 28.0,
-                vertical: 20,
+    return BlocConsumer<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is AuthSuccess) {
+          print("➡ Login success for: ${state.username}");
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text("✅ Welcome back!")));
+
+          // ✅ same navigation logic as before
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const AuthLayout()),
+            (route) => false,
+          );
+        } else if (state is AuthFailure) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("❌ Login failed: ${state.message}")),
+          );
+        }
+      },
+      builder: (context, state) {
+        // ✅ use Bloc state to handle loading
+        final isLoading = state is AuthLoading || _isLoading;
+
+        return Scaffold(
+          body: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF141E30), Color(0xFF243B55)],
               ),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.lock_open_rounded,
-                      size: 90,
-                      color: Colors.greenAccent,
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      "Welcome Back 👋",
-                      style: TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      "Login to continue your journey",
-                      style: TextStyle(color: Colors.white70, fontSize: 16),
-                    ),
-                    const SizedBox(height: 40),
-
-                    // Email
-                    TextFormField(
-                      controller: emailController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _inputDecoration("Email"),
-                      validator: (value) => value == null || value.isEmpty
-                          ? "Please enter email"
-                          : null,
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Password
-                    TextFormField(
-                      controller: passwordController,
-                      obscureText: true,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _inputDecoration("Password"),
-                      validator: (value) => value == null || value.isEmpty
-                          ? "Please enter password"
-                          : null,
-                    ),
-                    const SizedBox(height: 35),
-
-                    // Login button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.greenAccent,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          elevation: 10,
-                          shadowColor: Colors.greenAccent.withOpacity(0.5),
+            ),
+            child: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28.0,
+                    vertical: 20,
+                  ),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.lock_open_rounded,
+                          size: 90,
+                          color: Colors.greenAccent,
                         ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 22,
-                                width: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.black,
-                                ),
-                              )
-                            : const Text(
-                                "LOGIN",
+                        const SizedBox(height: 20),
+                        const Text(
+                          "Welcome Back 👋",
+                          style: TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "Login to continue your journey",
+                          style: TextStyle(color: Colors.white70, fontSize: 16),
+                        ),
+                        const SizedBox(height: 40),
+
+                        // Email
+                        TextFormField(
+                          controller: emailController,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: _inputDecoration("Email"),
+                          validator: (value) => value == null || value.isEmpty
+                              ? "Please enter email"
+                              : null,
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Password
+                        TextFormField(
+                          controller: passwordController,
+                          obscureText: true,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: _inputDecoration("Password"),
+                          validator: (value) => value == null || value.isEmpty
+                              ? "Please enter password"
+                              : null,
+                        ),
+                        const SizedBox(height: 35),
+
+                        // Login button
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: isLoading ? null : login,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.greenAccent,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                              elevation: 10,
+                              shadowColor: Colors.greenAccent.withOpacity(0.5),
+                            ),
+                            child: isLoading
+                                ? const SizedBox(
+                                    height: 22,
+                                    width: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.black,
+                                    ),
+                                  )
+                                : const Text(
+                                    "LOGIN",
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.2,
+                                    ),
+                                  ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 25),
+
+                        // Divider with "OR"
+                        Row(
+                          children: const [
+                            Expanded(
+                              child: Divider(
+                                color: Colors.white24,
+                                thickness: 1,
+                              ),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10),
+                              child: Text(
+                                "OR",
                                 style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.2,
+                                  color: Colors.white60,
+                                  fontSize: 13,
                                 ),
                               ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 25),
-
-                    // Divider with "OR"
-                    Row(
-                      children: const [
-                        Expanded(
-                          child: Divider(color: Colors.white24, thickness: 1),
-                        ),
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 10),
-                          child: Text(
-                            "OR",
-                            style: TextStyle(
-                              color: Colors.white60,
-                              fontSize: 13,
                             ),
+                            Expanded(
+                              child: Divider(
+                                color: Colors.white24,
+                                thickness: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 25),
+
+                        // Register text
+                        RichText(
+                          textAlign: TextAlign.center,
+                          text: TextSpan(
+                            text: "Don't have an account? ",
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: "Register now",
+                                style: const TextStyle(
+                                  color: Colors.greenAccent,
+                                  fontWeight: FontWeight.bold,
+                                  decoration: TextDecoration.underline,
+                                ),
+                                recognizer: TapGestureRecognizer()
+                                  ..onTap = widget.onTap,
+                              ),
+                            ],
                           ),
                         ),
-                        Expanded(
-                          child: Divider(color: Colors.white24, thickness: 1),
-                        ),
+                        const SizedBox(height: 30),
                       ],
                     ),
-                    const SizedBox(height: 25),
-
-                    // Register text
-                    RichText(
-                      textAlign: TextAlign.center,
-                      text: TextSpan(
-                        text: "Don't have an account? ",
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                        ),
-                        children: [
-                          TextSpan(
-                            text: "Register now",
-                            style: const TextStyle(
-                              color: Colors.greenAccent,
-                              fontWeight: FontWeight.bold,
-                              decoration: TextDecoration.underline,
-                            ),
-                            recognizer: TapGestureRecognizer()
-                              ..onTap = widget.onTap,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 30),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

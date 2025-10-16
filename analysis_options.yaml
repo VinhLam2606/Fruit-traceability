@@ -15,6 +15,7 @@ analyzer:
     prefer_interpolation_to_compose_strings: ignore
     deprecated_member_use: ignore
     unnecessary_to_list_in_spreads: ignore
+    avoid_print: ignore
 include: package:flutter_lints/flutter.yaml
 
 linter:
