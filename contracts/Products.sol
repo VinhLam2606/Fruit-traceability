@@ -107,18 +107,15 @@ contract Products is Users {
         emit ProductTransferred(batchId, from, to, block.timestamp);
     }
 
-    function updateProductDescription(string memory batchId, string memory desc) public onlyRegisteredUser {
+    function updateProductDescription(string memory batchId, string memory desc)
+        public
+        onlyRegisteredUser
+        onlySameOrgOrOwner(products[productIndexByBatchId[batchId]].currentOwner)
+    {
         if (!batchIdExists[batchId]) revert BatchNotExist();
         if (!users[msg.sender].isAlreadyInAnyOrganization) revert NotInOrg();
 
         Types.Product storage p = products[productIndexByBatchId[batchId]];
-        address currentOwner = p.currentOwner;
-
-        address productOwnerOrgOwner = memberToOrganizationOwner[currentOwner];
-        address updaterOrgOwner = memberToOrganizationOwner[msg.sender];
-
-        bool sameOrg = (productOwnerOrgOwner != address(0) && updaterOrgOwner != address(0) && productOwnerOrgOwner == updaterOrgOwner);
-        if (msg.sender != currentOwner && !sameOrg) revert NotOrgMember();
 
         productHistories.addProductHistory(batchId, msg.sender, p.currentOwner, desc);
         emit ProductInfoUpdated(batchId, desc, msg.sender, block.timestamp);
