@@ -82,6 +82,11 @@ contract Users {
         return organizations[_ownerAddress];
     }
 
+    function isInOrganization(address account) public view returns (bool) {
+        return users[account].isAlreadyInAnyOrganization;
+    }
+
+
     function getUser(address account) public view returns (Types.UserDetails memory) {
         return users[account];
     }

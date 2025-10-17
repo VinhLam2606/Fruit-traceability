@@ -185,7 +185,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
 
   @override
   Widget build(BuildContext context) {
-    // ... (Phần còn lại của hàm build không thay đổi)
     final scanBloc = context.read<ScanBloc>();
 
     return Scaffold(
@@ -213,10 +212,12 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
             if (scanState is ScanErrorState) {
               ScaffoldMessenger.of(context)
                 ..hideCurrentSnackBar()
-                ..showSnackBar(SnackBar(
-                  content: Text("❌ ${scanState.error}"),
-                  backgroundColor: Colors.redAccent,
-                ));
+                ..showSnackBar(
+                  SnackBar(
+                    content: Text("❌ ${scanState.error}"),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
             }
           },
           builder: (context, scanState) {
@@ -319,7 +320,9 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
                 if (_isDisposed) return;
 
                 final code = capture.barcodes.first.rawValue;
-                if (code != null && code.isNotEmpty && _lastScannedCode != code) {
+                if (code != null &&
+                    code.isNotEmpty &&
+                    _lastScannedCode != code) {
                   setState(() => _lastScannedCode = code);
                   _batchIdController.text = code;
                   scanBloc.add(BarcodeScannedEvent(code));
@@ -331,7 +334,10 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
           Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.greenAccent.withOpacity(0.7), width: 3),
+              border: Border.all(
+                color: Colors.greenAccent.withOpacity(0.7),
+                width: 3,
+              ),
             ),
           ),
           if (_lastScannedCode != null)
@@ -341,11 +347,19 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.greenAccent,
                   foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                 ),
                 icon: const Icon(Icons.qr_code_scanner),
-                label: const Text("Scan / Clear", style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text(
+                  "Scan / Clear",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 onPressed: _startNewScan,
               ),
             ),
@@ -354,6 +368,7 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
+  /// Nhập tay mã sản phẩm
   Widget _buildManualInputSection(ScanBloc scanBloc) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
@@ -366,10 +381,25 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
               decoration: InputDecoration(
                 hintText: 'Or enter Batch ID here',
                 hintStyle: const TextStyle(color: Colors.white54),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.white38)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.white38)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.greenAccent, width: 2)),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Colors.white38),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Colors.white38),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(
+                    color: Colors.greenAccent,
+                    width: 2,
+                  ),
+                ),
               ),
               onSubmitted: (value) {
                 final batchId = value.trim();
@@ -383,10 +413,12 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
           const SizedBox(width: 10),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.greenAccent,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.all(16)
+              backgroundColor: Colors.greenAccent,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.all(16),
             ),
             onPressed: () {
               final batchId = _batchIdController.text.trim();
@@ -397,14 +429,20 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
               }
             },
             child: const Icon(Icons.search),
-          )
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildContent(BuildContext context, ScanState scanState, ScanBloc bloc) {
-    if (scanState is ScanLoadingState || scanState is ProductHistoryLoadingState) {
+  /// Nội dung chính
+  Widget _buildContent(
+    BuildContext context,
+    ScanState scanState,
+    ScanBloc bloc,
+  ) {
+    if (scanState is ScanLoadingState ||
+        scanState is ProductHistoryLoadingState) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(32.0),
@@ -418,7 +456,9 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
         padding: const EdgeInsets.all(32.0),
         child: Center(
           child: Text(
-            scanState is ScanErrorState ? "Error: ${scanState.error}\nPlease scan again." : "Scan a barcode or enter an ID to search.",
+            scanState is ScanErrorState
+                ? "Error: ${scanState.error}\nPlease scan again."
+                : "Scan a barcode or enter an ID to search.",
             textAlign: TextAlign.center,
             style: const TextStyle(color: Colors.white70, fontSize: 16),
           ),
@@ -430,7 +470,8 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
       return RefreshIndicator(
         color: Colors.greenAccent,
         backgroundColor: const Color(0xFF243B55),
-        onRefresh: () async => bloc.add(BarcodeScannedEvent(scanState.product.batchId)),
+        onRefresh: () async =>
+            bloc.add(BarcodeScannedEvent(scanState.product.batchId)),
         child: ListView(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -441,9 +482,14 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
             if (scanState.historyErrorMessage != null)
               Padding(
                 padding: const EdgeInsets.only(top: 10),
-                child: Text(scanState.historyErrorMessage!,
-                    style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center),
+                child: Text(
+                  scanState.historyErrorMessage!,
+                  style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ),
           ],
         ),
@@ -458,14 +504,23 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.greenAccent.withOpacity(0.6), width: 1.2),
+        border: Border.all(
+          color: Colors.greenAccent.withOpacity(0.6),
+          width: 1.2,
+        ),
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(product.name,
-              style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+          Text(
+            product.name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const Divider(color: Colors.white38, height: 25),
           _infoRow('Batch ID', product.batchId, isAddress: true),
           _infoRow('Organization', product.organizationName),
@@ -488,8 +543,14 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(h.note,
-              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.greenAccent, fontSize: 15)),
+          Text(
+            h.note,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.greenAccent,
+              fontSize: 15,
+            ),
+          ),
           const SizedBox(height: 6),
           _historyDetailRow('From', h.from),
           _historyDetailRow('To', h.to),
@@ -505,20 +566,29 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(flex: 3, child: Text("$title:", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white70))),
+          Expanded(
+            flex: 3,
+            child: Text(
+              "$title:",
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.white70,
+              ),
+            ),
+          ),
           Expanded(
             flex: 5,
             child: Row(
               children: [
                 Expanded(
-                    child: Text(
-                        value,
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontFamily: isAddress ? "monospace" : null
-                        ),
-                        overflow: TextOverflow.ellipsis
-                    )
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: isAddress ? "monospace" : null,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 if (isAddress)
                   GestureDetector(
@@ -531,7 +601,11 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
                         ),
                       );
                     },
-                    child: const Icon(Icons.copy, color: Colors.greenAccent, size: 18),
+                    child: const Icon(
+                      Icons.copy,
+                      color: Colors.greenAccent,
+                      size: 18,
+                    ),
                   ),
               ],
             ),
@@ -545,8 +619,16 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text("$title: ", style: const TextStyle(color: Colors.white54, fontSize: 13)),
-        Flexible(child: Text(value, style: const TextStyle(color: Colors.white, fontSize: 13))),
+        Text(
+          "$title: ",
+          style: const TextStyle(color: Colors.white54, fontSize: 13),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+          ),
+        ),
       ],
     );
   }

@@ -1,6 +1,8 @@
-// main.dart
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart'; // ✅ added
+import 'auth/bloc/auth_bloc.dart'; // ✅ added
+import 'auth/service/auth_service.dart'; // ✅ added
 
 import 'auth/auth_layout.dart';
 import 'auth/ui/home_page.dart';
@@ -20,17 +22,19 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ❌ KHÔNG dùng MultiBlocProvider hay BlocProvider ở đây.
-    // Việc này sẽ do AuthLayout xử lý sau khi đăng nhập thành công.
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: const AuthLayout(), // Widget gốc là AuthLayout
-      routes: {
-        "/register": (_) => const RegisterPage(),
-        "/login": (_) => const LoginPage(),
-        "/home": (_) => const HomePage(),
-        "/createProduct": (_) => const CreateProductPage(),
-      },
+    // ✅ Provide AuthBloc here so Login/Register can access it
+    return BlocProvider(
+      create: (_) => AuthBloc(authService.value),
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: const AuthLayout(),
+        routes: {
+          "/register": (_) => const RegisterPage(),
+          "/login": (_) => const LoginPage(),
+          "/home": (_) => const HomePage(),
+          "/createProduct": (_) => const CreateProductPage(),
+        },
+      ),
     );
   }
 }
