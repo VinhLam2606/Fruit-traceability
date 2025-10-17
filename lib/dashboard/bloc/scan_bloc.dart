@@ -20,7 +20,7 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
   DeployedContract? _deployedContract;
   ContractFunction? _getProductFunction;
   ContractFunction? _getProductHistoryFunction;
-  ContractFunction? _updateProductDescriptionFunction;
+  ContractFunction? _addProcessStepFunction;
 
   ScanBloc({
     required this.web3client,
@@ -29,7 +29,7 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
     on<ScanInitializeEvent>(_onInitialize);
     on<BarcodeScannedEvent>(_onBarcodeScannedEvent);
     on<FetchProductHistoryEvent>(_onFetchProductHistoryEvent);
-    on<UpdateProductDescriptionEvent>(_onUpdateProductDescriptionEvent);
+    on<AddProcessStepEvent>(_onAddProcessStepEvent);
 
     add(ScanInitializeEvent());
   }
@@ -54,7 +54,7 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
 
       _getProductFunction = _deployedContract!.function('getProduct');
       _getProductHistoryFunction = _deployedContract!.function('getProductHistory');
-      _updateProductDescriptionFunction = _deployedContract!.function('updateProductDescription');
+      _addProcessStepFunction = _deployedContract!.function('addProcessStep');
 
       developer.log("📌 ScanBloc Contract address loaded: $contractAddress");
 
@@ -156,8 +156,8 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
     }
   }
 
-  FutureOr<void> _onUpdateProductDescriptionEvent(
-      UpdateProductDescriptionEvent event, Emitter<ScanState> emit) async {
+  FutureOr<void> _onAddProcessStepEvent(
+      AddProcessStepEvent event, Emitter<ScanState> emit) async {
     if (state is! ProductInfoLoadedState) return;
     final currentState = state as ProductInfoLoadedState;
 
@@ -169,17 +169,27 @@ class ScanBloc extends Bloc<ScanEvent, ScanState> {
         credentials,
         Transaction.callContract(
           contract: _deployedContract!,
-          function: _updateProductDescriptionFunction!,
-          parameters: [event.batchId, event.description],
+          function: _addProcessStepFunction!,
+          parameters: [
+            event.batchId,
+            event.processName,
+            BigInt.from(event.processType),
+            event.description,
+          ],
         ),
         chainId: 1337,
       );
-      developer.log("✅ Product info updated! TxHash: $txHash");
+      developer.log("✅ Process step added! TxHash: $txHash");
+
+      // Sau khi thêm thành công, tải lại cả thông tin sản phẩm (để cập nhật status)
+      // và lịch sử
+      add(BarcodeScannedEvent(event.batchId));
       add(FetchProductHistoryEvent(event.batchId));
+
     } catch (e, st) {
-      developer.log("❌ [UpdateProduct] Failed", error: e, stackTrace: st);
+      developer.log("❌ [AddProcessStep] Failed", error: e, stackTrace: st);
       emit(currentState.copyWith(
-          historyErrorMessage: "❌ Không thể cập nhật mô tả. Vui lòng kiểm tra quyền truy cập."));
+          historyErrorMessage: "❌ Không thể thêm quy trình. Vui lòng kiểm tra quyền truy cập."));
     }
   }
 }

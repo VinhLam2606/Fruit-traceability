@@ -16,12 +16,16 @@ class FetchProductHistoryEvent extends ScanEvent {
   FetchProductHistoryEvent(this.batchId);
 }
 
-class UpdateProductDescriptionEvent extends ScanEvent {
+class AddProcessStepEvent extends ScanEvent {
   final String batchId;
+  final String processName;
+  final int processType;
   final String description;
 
-  UpdateProductDescriptionEvent({
+  AddProcessStepEvent({
     required this.batchId,
+    required this.processName,
+    required this.processType,
     required this.description,
   });
 }

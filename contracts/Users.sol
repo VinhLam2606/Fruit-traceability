@@ -17,21 +17,6 @@ contract Users {
         _;
     }
 
-    modifier onlySameOrgOrOwner(address owner) {
-        // Cho phép nếu chính chủ
-        if (msg.sender == owner) {
-            _;
-            return;
-        }
-        // Cho phép nếu cùng tổ chức
-        if (areInSameOrganization(msg.sender, owner)) {
-            _;
-            return;
-        }
-        // Nếu không cùng tổ chức hoặc không phải chủ -> chặn
-        revert("NotOrgMember");
-    }
-
 
     mapping(address => Types.UserDetails) internal users;
     mapping(address => Types.Organization) internal organizations;

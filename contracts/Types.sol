@@ -16,6 +16,14 @@ library Types {
         Rejected // 2
     }
 
+    enum ProcessType {
+        Cultivation,   // Trồng trọt
+        Processing,    // Sơ chế
+        Packaging,     // Đóng gói
+        Transport,     // Vận chuyển
+        Distribution   // Phân phối
+    }
+
     struct UserHistory {
         address _userID;
         uint256 _timestamp;
@@ -37,14 +45,23 @@ library Types {
         AuthorizationStatus organizationStatus;
     }
 
+    struct ProcessStep {
+        string processName;
+        ProcessType processType;
+        string description;
+        uint256 date;
+        string organizationName;
+    }
+
     struct Product {
         string batchId;
         string name;
         string organizationName;
         address creator;
-        // THAY ĐỔI: Gộp harvestDate và expiryDate thành một trường 'date'
         uint256 date;
         address currentOwner;
+        string status;
+        Types.ProcessStep[] processSteps;
     }
 
     struct ProductHistory {

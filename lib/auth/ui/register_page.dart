@@ -94,7 +94,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Future<void> initGanacheAdmin() async {
     const mnemonic =
-        "impact sport page dice power fury simple pig sibling gate tiny gossip";
+        "decorate foil consider depart section genuine plate person change file catch animal";
 
     try {
       final ganacheAccounts = await getGanacheAccounts();

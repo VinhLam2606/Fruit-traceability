@@ -1,12 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 
-import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -31,7 +28,6 @@ class CreateProductView extends StatefulWidget {
 
 class _CreateProductViewState extends State<CreateProductView> {
   final TextEditingController nameController = TextEditingController();
-  // --- ĐÃ XÓA: dateController ---
   final TextEditingController quantityController = TextEditingController(
     text: '1',
   );
@@ -57,14 +53,12 @@ class _CreateProductViewState extends State<CreateProductView> {
     final dateTime = DateTime.fromMillisecondsSinceEpoch(
       timestamp.toInt() * 1000,
     );
-    // THAY ĐỔI: Thêm giờ và phút để hiển thị chính xác hơn
     return DateFormat('dd/MM/yyyy HH:mm').format(dateTime);
   }
 
   @override
   void dispose() {
     nameController.dispose();
-    // --- ĐÃ XÓA: dateController.dispose() ---
     quantityController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -110,8 +104,8 @@ class _CreateProductViewState extends State<CreateProductView> {
           builder: (context, state) {
             final isLoading =
                 _isProcessing ||
-                (state is DashboardLoadingState &&
-                    state is! ProductsLoadedState);
+                    (state is DashboardLoadingState &&
+                        state is! ProductsLoadedState);
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -140,7 +134,6 @@ class _CreateProductViewState extends State<CreateProductView> {
           decoration: _inputDecoration('Product Name'),
         ),
         const SizedBox(height: 16),
-        // --- ĐÃ XÓA: TextField cho Date ---
         TextField(
           controller: quantityController,
           style: const TextStyle(color: Colors.white),
@@ -196,11 +189,10 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 
   Future<void> _createProductsSequentially(
-    BuildContext context,
-    bool generatePdf,
-  ) async {
+      BuildContext context,
+      bool generatePdf,
+      ) async {
     final int quantity = int.tryParse(quantityController.text) ?? 1;
-    // --- THAY ĐỔI: Lấy thời gian hiện tại (timestamp in seconds) ---
     final int currentTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final String baseName = nameController.text.trim();
 
@@ -230,10 +222,11 @@ class _CreateProductViewState extends State<CreateProductView> {
           batchId: generatedBatchId,
           name: name,
           organizationName: "N/A",
-          creator: "0x0000000000000000000000000000000000000000",
-          // --- THAY ĐỔI: Sử dụng timestamp hiện tại ---
+          creator: "0x0",
           date: BigInt.from(currentTimestamp),
-          currentOwner: "0x0000000000000000000000000000000000000000",
+          currentOwner: "0x0",
+          status: "Created",
+          processSteps: [],
         );
 
         _createdProducts.add(product);
@@ -242,7 +235,6 @@ class _CreateProductViewState extends State<CreateProductView> {
           CreateProductButtonPressedEvent(
             batchId: generatedBatchId,
             name: name,
-            // --- THAY ĐỔI: Gửi timestamp hiện tại đi ---
             date: currentTimestamp,
           ),
         );
@@ -255,7 +247,6 @@ class _CreateProductViewState extends State<CreateProductView> {
       }
 
       nameController.clear();
-      // --- ĐÃ XÓA: dateController.clear() ---
       quantityController.text = '1';
     } finally {
       _hideLoadingDialog(context);
@@ -263,7 +254,6 @@ class _CreateProductViewState extends State<CreateProductView> {
     }
   }
 
-  // 🌀 POPUP LOADING
   void _showLoadingDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -292,7 +282,6 @@ class _CreateProductViewState extends State<CreateProductView> {
       final end = (start + totalPerPage > products.length)
           ? products.length
           : start + totalPerPage;
-
       final pageProducts = products.sublist(start, end);
 
       pdf.addPage(
@@ -350,11 +339,6 @@ class _CreateProductViewState extends State<CreateProductView> {
       );
     }
 
-    final directory = await getApplicationDocumentsDirectory();
-    final filePath = "${directory.path}/product_barcodes.pdf";
-    final file = File(filePath);
-    await file.writeAsBytes(await pdf.save());
-
     await Printing.sharePdf(
       bytes: await pdf.save(),
       filename: "product_barcodes.pdf",
@@ -376,14 +360,22 @@ class _CreateProductViewState extends State<CreateProductView> {
     );
   }
 
+  void _showProductDetailsDialog(BuildContext context, Product product) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return ProductDetailsDialog(product: product);
+      },
+    );
+  }
+
   Widget _buildProductList(
-    BuildContext context,
-    DashboardState state,
-    bool isLoading,
-  ) {
+      BuildContext context,
+      DashboardState state,
+      bool isLoading,
+      ) {
     final products = state is ProductsLoadedState
-        ? state.products.reversed
-              .toList() // Hiển thị sản phẩm mới nhất lên đầu
+        ? state.products.reversed.toList()
         : <Product>[];
 
     return Expanded(
@@ -406,8 +398,8 @@ class _CreateProductViewState extends State<CreateProductView> {
                 onPressed: isLoading
                     ? null
                     : () {
-                        context.read<DashboardBloc>().add(FetchProductsEvent());
-                      },
+                  context.read<DashboardBloc>().add(FetchProductsEvent());
+                },
               ),
             ],
           ),
@@ -459,41 +451,18 @@ class _CreateProductViewState extends State<CreateProductView> {
                             color: Colors.white,
                           ),
                         ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Batch ID: ${product.batchId}",
-                              style: const TextStyle(color: Colors.white70),
-                            ),
-                            Text(
-                              "Date: ${_formatTimestamp(product.date)}",
-                              style: const TextStyle(
-                                color: Colors.white54,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Center(
-                              child: Container(
-                                width: 250,
-                                height: 70,
-                                margin: const EdgeInsets.symmetric(vertical: 8),
-                                color: Colors.white,
-                                padding: const EdgeInsets.all(4),
-                                child: BarcodeWidget(
-                                  barcode: Barcode.code128(),
-                                  data: product.batchId,
-                                  drawText: true,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.black,
-                                  ),
-                                  color: Colors.black,
-                                ),
-                              ),
-                            ),
-                          ],
+                        subtitle: Text(
+                          "Batch ID: ${product.batchId}",
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                        // --- THAY ĐỔI: Thêm nút info ---
+                        trailing: IconButton(
+                          icon: const Icon(
+                            Icons.info_outline,
+                            color: Colors.white70,
+                          ),
+                          onPressed: () =>
+                              _showProductDetailsDialog(context, product),
                         ),
                       ),
                     );
@@ -501,6 +470,158 @@ class _CreateProductViewState extends State<CreateProductView> {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- WIDGET MỚI: Dialog hiển thị chi tiết sản phẩm ---
+class ProductDetailsDialog extends StatelessWidget {
+  final Product product;
+
+  const ProductDetailsDialog({super.key, required this.product});
+
+  // Helper để định dạng timestamp
+  String _formatTimestamp(BigInt timestamp) {
+    if (timestamp == BigInt.zero) return "N/A";
+    final dateTime = DateTime.fromMillisecondsSinceEpoch(
+      timestamp.toInt() * 1000,
+    );
+    return DateFormat('dd/MM/yyyy HH:mm').format(dateTime);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF1c2a41),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.greenAccent.withOpacity(0.3)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                product.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Batch: ${product.batchId}",
+                style: const TextStyle(color: Colors.greenAccent, fontSize: 14),
+              ),
+              const Divider(color: Colors.white24, height: 24),
+              _buildDetailRow("Status:", product.status),
+              _buildDetailRow("Created Date:", _formatTimestamp(product.date)),
+              _buildDetailRow("Creator:", product.creator, isAddress: true),
+              _buildDetailRow("Current Owner:", product.currentOwner, isAddress: true),
+              _buildDetailRow("Organization:", product.organizationName),
+              const SizedBox(height: 20),
+              _buildProcessSteps(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String title, String value, {bool isAddress = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(color: Colors.white70)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                color: isAddress ? Colors.amber[300] : Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProcessSteps() {
+    if (product.processSteps.isEmpty) {
+      return const Center(
+        child: Text(
+          "No process history available.",
+          style: TextStyle(color: Colors.white54, fontStyle: FontStyle.italic),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Process History",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...product.processSteps.map((step) => _buildProcessStepCard(step)),
+      ],
+    );
+  }
+
+  Widget _buildProcessStepCard(ProcessStep step) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            step.processName,
+            style: const TextStyle(
+              color: Colors.greenAccent,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            step.description,
+            style: const TextStyle(color: Colors.white70),
+          ),
+          const Divider(color: Colors.white12, height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                step.organizationName,
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              Text(
+                _formatTimestamp(step.date),
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ),
         ],
       ),
     );

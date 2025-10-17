@@ -24,6 +24,14 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
   final TextEditingController _batchIdController = TextEditingController();
   bool _isDisposed = false;
 
+  final List<String> _processTypes = const [
+    'Cultivation', // 0
+    'Processing',  // 1
+    'Packaging',   // 2
+    'Transport',   // 3
+    'Distribution' // 4
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -54,7 +62,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
       final orgBloc = context.read<OrganizationBloc>();
       return orgBloc.state is OrganizationLoaded;
     } catch (e) {
-      // OrganizationBloc not provided
       return false;
     }
   }
@@ -68,64 +75,117 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
         return state.organization.organizationName;
       }
     } catch (e) {
-      // OrganizationBloc not provided
+      // Bloc not provided
     }
     return null;
   }
 
-  /// Dialog cập nhật mô tả sản phẩm
-  Future<void> _showUpdateDialog(Product product) async {
+  // --- THAY ĐỔI: Toàn bộ dialog đã được viết lại để thêm quy trình ---
+  /// Dialog để thêm một bước quy trình mới
+  Future<void> _showAddProcessDialog(Product product) async {
+    final processNameController = TextEditingController();
     final descriptionController = TextEditingController();
     final scanBloc = context.read<ScanBloc>();
+    int selectedProcessTypeIndex = 0; // Mặc định là 'Cultivation'
 
     if (!mounted) return;
 
     return showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF243B55),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          title: const Text('Update Product Information',
-              style: TextStyle(color: Colors.white)),
-          content: TextField(
-            controller: descriptionController,
-            autofocus: true,
-            style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(
-              hintText: 'Enter new description or note',
-              hintStyle: TextStyle(color: Colors.white54),
-              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white70)),
-              focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.greenAccent)),
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent),
-              child: const Text('Submit', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-              onPressed: () {
-                final desc = descriptionController.text.trim();
-                if (desc.isNotEmpty) {
-                  scanBloc.add(UpdateProductDescriptionEvent(
-                    batchId: product.batchId,
-                    description: desc,
-                  ));
-                  Navigator.of(dialogContext).pop();
-                }
-              },
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF243B55),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              title: const Text('Add Process Step', style: TextStyle(color: Colors.white)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Tên quy trình
+                    TextField(
+                      controller: processNameController,
+                      autofocus: true,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _dialogInputDecoration('Process Name (e.g., "Harvesting Lot A")'),
+                    ),
+                    const SizedBox(height: 20),
+                    // Loại quy trình
+                    DropdownButtonFormField<int>(
+                      value: selectedProcessTypeIndex,
+                      items: _processTypes.asMap().entries.map((entry) {
+                        return DropdownMenuItem<int>(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() {
+                            selectedProcessTypeIndex = value;
+                          });
+                        }
+                      },
+                      decoration: _dialogInputDecoration('Process Type'),
+                      dropdownColor: const Color(0xFF141E30),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    const SizedBox(height: 20),
+                    // Mô tả
+                    TextField(
+                      controller: descriptionController,
+                      style: const TextStyle(color: Colors.white),
+                      maxLines: 3,
+                      decoration: _dialogInputDecoration('Description or Note'),
+                    ),
+                  ],
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent),
+                  child: const Text('Submit', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                  onPressed: () {
+                    final name = processNameController.text.trim();
+                    final desc = descriptionController.text.trim();
+                    if (name.isNotEmpty) {
+                      scanBloc.add(AddProcessStepEvent(
+                        batchId: product.batchId,
+                        processName: name,
+                        processType: selectedProcessTypeIndex, // Gửi index của enum
+                        description: desc,
+                      ));
+                      Navigator.of(dialogContext).pop();
+                    }
+                  },
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
 
+  // Helper để trang trí input trong dialog
+  InputDecoration _dialogInputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: Colors.white54),
+      enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white70)),
+      focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.greenAccent)),
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
+    // ... (Phần còn lại của hàm build không thay đổi)
     final scanBloc = context.read<ScanBloc>();
 
     return Scaffold(
@@ -178,7 +238,72 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
-  /// Scanner
+  // --- THAY ĐỔI: Trong hàm _buildActionAndHistorySection ---
+  Widget _buildActionAndHistorySection(BuildContext context, ProductInfoLoadedState scanState, ScanBloc bloc) {
+    final userOrgName = _getOrganizationName(context);
+    final canUpdate = userOrgName != null && userOrgName == scanState.product.organizationName;
+
+    if (scanState is! ProductDetailsLoadedState) {
+      return Center(
+        child: Column(
+          children: [
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.greenAccent.withOpacity(0.9),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)
+              ),
+              icon: const Icon(Icons.history, size: 20),
+              label: const Text("View Transaction History", style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () => bloc.add(FetchProductHistoryEvent(scanState.product.batchId)),
+            ),
+            const SizedBox(height: 15),
+            if (canUpdate)
+            // --- THAY ĐỔI: Nút bấm để thêm quy trình ---
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orangeAccent,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)
+                ),
+                icon: const Icon(Icons.add_circle_outline, size: 20), // Icon mới
+                label: const Text("Add Process Step", style: TextStyle(fontWeight: FontWeight.bold)), // Label mới
+                onPressed: () => _showAddProcessDialog(scanState.product), // Gọi dialog mới
+              )
+            else if (!_hasOrganization(context))
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  "💡 Join an organization to add process steps to products", // Text hướng dẫn mới
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 13,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+    // ... (Phần còn lại của hàm không đổi)
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Transaction History",
+            style: TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        if (scanState.history.isEmpty)
+          const Text("No transactions have been recorded yet.",
+              style: TextStyle(color: Colors.white54))
+        else
+          ...scanState.history.map((h) => _buildHistoryItemCard(h)).toList(),
+      ],
+    );
+  }
+
+  // ... (Các hàm build khác giữ nguyên không thay đổi)
   Widget _buildScannerSection(ScanBloc scanBloc) {
     return Container(
       padding: const EdgeInsets.only(top: 80),
@@ -229,7 +354,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
-  /// Nhập tay mã sản phẩm
   Widget _buildManualInputSection(ScanBloc scanBloc) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
@@ -279,7 +403,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
-  /// Nội dung chính
   Widget _buildContent(BuildContext context, ScanState scanState, ScanBloc bloc) {
     if (scanState is ScanLoadingState || scanState is ProductHistoryLoadingState) {
       return const Center(
@@ -350,70 +473,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
           _infoRow('Current Owner', product.currentOwner, isAddress: true),
         ],
       ),
-    );
-  }
-
-  Widget _buildActionAndHistorySection(BuildContext context, ProductInfoLoadedState scanState, ScanBloc bloc) {
-    // Check if user has an organization and if it matches the product's organization
-    final userOrgName = _getOrganizationName(context);
-    final canUpdate = userOrgName != null && userOrgName == scanState.product.organizationName;
-
-    if (scanState is! ProductDetailsLoadedState) {
-      return Center(
-        child: Column(
-          children: [
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.greenAccent.withOpacity(0.9),
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)
-              ),
-              icon: const Icon(Icons.history, size: 20),
-              label: const Text("View Transaction History", style: TextStyle(fontWeight: FontWeight.bold)),
-              onPressed: () => bloc.add(FetchProductHistoryEvent(scanState.product.batchId)),
-            ),
-            const SizedBox(height: 15),
-            if (canUpdate)
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orangeAccent,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)
-                ),
-                icon: const Icon(Icons.edit, size: 20),
-                label: const Text("Update Product Info", style: TextStyle(fontWeight: FontWeight.bold)),
-                onPressed: () => _showUpdateDialog(scanState.product),
-              )
-            else if (!_hasOrganization(context))
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  "💡 Join an organization to update product information",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
-                    fontSize: 13,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("Transaction History",
-            style: TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
-        if (scanState.history.isEmpty)
-          const Text("No transactions have been recorded yet.",
-              style: TextStyle(color: Colors.white54))
-        else
-          ...scanState.history.map((h) => _buildHistoryItemCard(h)).toList(),
-      ],
     );
   }
 

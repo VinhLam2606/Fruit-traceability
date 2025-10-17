@@ -21,22 +21,33 @@ class ProductHistory {
 
   /// Parse từ struct ProductHistory trong Solidity
   factory ProductHistory.fromContract(List<dynamic> contractData) {
-    if (contractData.length < 5) {
+    if (contractData.length != 5) {
       throw const FormatException(
           "Dữ liệu hợp đồng lịch sử sản phẩm không hợp lệ");
     }
 
-    // ✅ SỬA LỖI: Đã cập nhật đúng thứ tự các trường để khớp với Types.sol
     return ProductHistory(
       batchId: contractData[0] as String,
       from: (contractData[1] as EthereumAddress).hex,
       to: (contractData[2] as EthereumAddress).hex,
-      timestamp: contractData[3] as BigInt, // timestamp là phần tử thứ 4 (index 3)
-      note: contractData[4] as String,      // note là phần tử thứ 5 (index 4)
+      timestamp: contractData[3] as BigInt,
+      note: contractData[4] as String,
     );
   }
 
-  /// Chuyển BigInt timestamp sang DateTime
   DateTime get dateTime =>
-      DateTime.fromMillisecondsSinceEpoch(timestamp.toInt() * 1000);
+      DateTime.fromMillisecondsSinceEpoch(timestamp.toInt() * 1000, isUtc: true).toLocal();
+
+  Map<String, dynamic> toJson() => {
+    'batchId': batchId,
+    'from': from,
+    'to': to,
+    'timestamp': timestamp.toString(),
+    'note': note,
+    'dateTime': dateTime.toIso8601String(),
+  };
+
+  @override
+  String toString() =>
+      'ProductHistory(batchId: $batchId, from: $from, to: $to, note: $note, time: $dateTime)';
 }
