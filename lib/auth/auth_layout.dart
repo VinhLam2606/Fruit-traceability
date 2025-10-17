@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
+import 'package:untitled/dashboard/bloc/scan_bloc.dart';
+// ✅ 1. Import UserOrganizationBloc
+import 'package:untitled/dashboard/bloc/user_organization_bloc.dart';
 import 'package:untitled/navigation/customer_navigation.dart';
 import 'package:untitled/navigation/main_navigation.dart';
-import 'package:untitled/dashboard/bloc/scan_bloc.dart';
 import 'package:web3dart/web3dart.dart';
 
 import 'service/auth_service.dart';
@@ -24,11 +26,10 @@ class AppLoadingPage extends StatelessWidget {
 class AuthLayout extends StatelessWidget {
   const AuthLayout({super.key});
 
-  // Đổi tên hàm để rõ ràng hơn, nó tải contract "Chain"
+  // Tải contract "Chain"
   Future<DeployedContract> _loadChainContract(BuildContext context) async {
-    final abiString = await DefaultAssetBundle.of(
-      context,
-    ).loadString("build/contracts/Chain.json");
+    final abiString =
+    await DefaultAssetBundle.of(context).loadString("build/contracts/Chain.json");
     final jsonAbi = jsonDecode(abiString);
     final abi = ContractAbi.fromJson(jsonEncode(jsonAbi['abi']), 'Chain');
     final networkKey = (jsonAbi['networks'] as Map<String, dynamic>).keys.first;
@@ -53,38 +54,63 @@ class AuthLayout extends StatelessWidget {
         final credentials = EthPrivateKey.fromHex(service.decryptedPrivateKey!);
         final accountType = service.accountType;
 
-        if (accountType == "organization") {
-          // 🏢 Tổ chức → Cung cấp DashboardBloc, MainNavigationPage sẽ cung cấp các BLoC con
-          return BlocProvider<DashboardBloc>(
-            create: (_) => DashboardBloc(
-              web3client: web3client,
-              credentials: credentials,
-            )..add(DashboardInitialFetchEvent()),
-            child: const MainNavigationPage(),
-          );
-        } else if (accountType == "user") {
-          // 👤 Customer → Cung cấp ScanBloc, sau đó tải contract cho CustomerNavigationPage
-          return BlocProvider<ScanBloc>(
-            create: (_) => ScanBloc(web3client: web3client, credentials: credentials),
-            child: FutureBuilder<DeployedContract>(
-              future: _loadChainContract(context),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting || !snapshot.hasData) {
-                  return const AppLoadingPage();
-                }
-                if (snapshot.hasError) {
-                  return Scaffold(body: Center(child: Text("Lỗi tải contract: ${snapshot.error}")));
-                }
-                return CustomerNavigationPage(
-                  web3client: web3client,
-                  deployedContract: snapshot.data!,
-                );
-              },
+        // ✅ 2. Sử dụng MultiBlocProvider để cung cấp tất cả BLoC cần thiết
+        return MultiBlocProvider(
+          providers: [
+            // Cung cấp DashboardBloc (dành cho owner)
+            BlocProvider<DashboardBloc>(
+              create: (_) => DashboardBloc(
+                web3client: web3client,
+                credentials: credentials,
+              )..add(DashboardInitialFetchEvent()),
             ),
-          );
-        }
-
-        return const LoginOrRegisterPage();
+            // Cung cấp ScanBloc (dành cho mọi người)
+            BlocProvider<ScanBloc>(
+              create: (_) => ScanBloc(
+                web3client: web3client,
+                credentials: credentials,
+              ),
+            ),
+            // ✅ 3. Cung cấp UserOrganizationBloc ở đây
+            // BLoC này sẽ có sẵn cho cả "user" và "organization"
+            BlocProvider<UserOrganizationBloc>(
+              create: (_) => UserOrganizationBloc(
+                web3client: web3client,
+                credentials: credentials,
+              )..add(FetchUserOrganization()), // Tải thông tin tổ chức của người dùng ngay
+            ),
+          ],
+          child: Builder(
+            builder: (context) {
+              // ✅ 4. Logic điều hướng được giữ nguyên bên trong child
+              if (accountType == "organization") {
+                return const MainNavigationPage();
+              } else if (accountType == "user") {
+                return FutureBuilder<DeployedContract>(
+                  future: _loadChainContract(context),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting ||
+                        !snapshot.hasData) {
+                      return const AppLoadingPage();
+                    }
+                    if (snapshot.hasError) {
+                      return Scaffold(
+                          body: Center(
+                              child: Text(
+                                  "Lỗi tải contract: ${snapshot.error}")));
+                    }
+                    return CustomerNavigationPage(
+                      web3client: web3client,
+                      deployedContract: snapshot.data!,
+                    );
+                  },
+                );
+              }
+              // Trả về trang đăng nhập nếu có lỗi
+              return const LoginOrRegisterPage();
+            },
+          ),
+        );
       },
     );
   }

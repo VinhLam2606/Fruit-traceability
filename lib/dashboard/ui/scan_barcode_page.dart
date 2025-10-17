@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:untitled/dashboard/bloc/organization_bloc.dart';
+import 'package:untitled/dashboard/bloc/user_organization_bloc.dart';
 import 'package:untitled/dashboard/bloc/scan_bloc.dart';
 import 'package:untitled/dashboard/model/product.dart';
 import 'package:untitled/dashboard/model/productHistory.dart';
@@ -25,11 +25,7 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
   bool _isDisposed = false;
 
   final List<String> _processTypes = const [
-    'Cultivation', // 0
-    'Processing',  // 1
-    'Packaging',   // 2
-    'Transport',   // 3
-    'Distribution' // 4
+    'Cultivation', 'Processing', 'Packaging', 'Transport', 'Distribution'
   ];
 
   @override
@@ -56,31 +52,24 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     super.dispose();
   }
 
-  /// Check if user has joined an organization
+  /// ✅ 2. SỬA LẠI: Kiểm tra xem user có thuộc tổ chức nào không
+  /// bằng cách đọc từ UserOrganizationBloc.
   bool _hasOrganization(BuildContext context) {
-    try {
-      final orgBloc = context.read<OrganizationBloc>();
-      return orgBloc.state is OrganizationLoaded;
-    } catch (e) {
-      return false;
-    }
+    // Dùng context.watch để widget tự động cập nhật khi trạng thái BLoC thay đổi.
+    final orgState = context.watch<UserOrganizationBloc>().state;
+    return orgState is UserOrganizationLoaded;
   }
 
-  /// Get organization name if available
+  /// ✅ 3. SỬA LẠI: Lấy tên tổ chức từ UserOrganizationBloc.
   String? _getOrganizationName(BuildContext context) {
-    try {
-      final orgBloc = context.read<OrganizationBloc>();
-      final state = orgBloc.state;
-      if (state is OrganizationLoaded) {
-        return state.organization.organizationName;
-      }
-    } catch (e) {
-      // Bloc not provided
+    // Dùng context.read vì chỉ cần đọc giá trị hiện tại, không cần lắng nghe thay đổi.
+    final state = context.read<UserOrganizationBloc>().state;
+    if (state is UserOrganizationLoaded) {
+      return state.organization.organizationName;
     }
     return null;
   }
 
-  // --- THAY ĐỔI: Toàn bộ dialog đã được viết lại để thêm quy trình ---
   /// Dialog để thêm một bước quy trình mới
   Future<void> _showAddProcessDialog(Product product) async {
     final processNameController = TextEditingController();
@@ -103,7 +92,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Tên quy trình
                     TextField(
                       controller: processNameController,
                       autofocus: true,
@@ -111,7 +99,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
                       decoration: _dialogInputDecoration('Process Name (e.g., "Harvesting Lot A")'),
                     ),
                     const SizedBox(height: 20),
-                    // Loại quy trình
                     DropdownButtonFormField<int>(
                       value: selectedProcessTypeIndex,
                       items: _processTypes.asMap().entries.map((entry) {
@@ -132,7 +119,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
                       style: const TextStyle(color: Colors.white),
                     ),
                     const SizedBox(height: 20),
-                    // Mô tả
                     TextField(
                       controller: descriptionController,
                       style: const TextStyle(color: Colors.white),
@@ -157,7 +143,7 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
                       scanBloc.add(AddProcessStepEvent(
                         batchId: product.batchId,
                         processName: name,
-                        processType: selectedProcessTypeIndex, // Gửi index của enum
+                        processType: selectedProcessTypeIndex,
                         description: desc,
                       ));
                       Navigator.of(dialogContext).pop();
@@ -172,7 +158,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
-  // Helper để trang trí input trong dialog
   InputDecoration _dialogInputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
@@ -239,8 +224,8 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
-  // --- THAY ĐỔI: Trong hàm _buildActionAndHistorySection ---
   Widget _buildActionAndHistorySection(BuildContext context, ProductInfoLoadedState scanState, ScanBloc bloc) {
+    // ✅ Logic này giờ đã hoạt động đúng vì các hàm helper đã được sửa
     final userOrgName = _getOrganizationName(context);
     final canUpdate = userOrgName != null && userOrgName == scanState.product.organizationName;
 
@@ -260,22 +245,21 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
             ),
             const SizedBox(height: 15),
             if (canUpdate)
-            // --- THAY ĐỔI: Nút bấm để thêm quy trình ---
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orangeAccent,
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)
                 ),
-                icon: const Icon(Icons.add_circle_outline, size: 20), // Icon mới
-                label: const Text("Add Process Step", style: TextStyle(fontWeight: FontWeight.bold)), // Label mới
-                onPressed: () => _showAddProcessDialog(scanState.product), // Gọi dialog mới
+                icon: const Icon(Icons.add_circle_outline, size: 20),
+                label: const Text("Add Process Step", style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () => _showAddProcessDialog(scanState.product),
               )
             else if (!_hasOrganization(context))
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
-                  "💡 Join an organization to add process steps to products", // Text hướng dẫn mới
+                  "💡 Join an organization to add process steps to products",
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.6),
@@ -288,7 +272,7 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
         ),
       );
     }
-    // ... (Phần còn lại của hàm không đổi)
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -304,7 +288,7 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
-  // ... (Các hàm build khác giữ nguyên không thay đổi)
+  // ... (Các hàm build khác không có thay đổi)
   Widget _buildScannerSection(ScanBloc scanBloc) {
     return Container(
       padding: const EdgeInsets.only(top: 80),
@@ -368,7 +352,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
-  /// Nhập tay mã sản phẩm
   Widget _buildManualInputSection(ScanBloc scanBloc) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
@@ -435,12 +418,11 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
-  /// Nội dung chính
   Widget _buildContent(
-    BuildContext context,
-    ScanState scanState,
-    ScanBloc bloc,
-  ) {
+      BuildContext context,
+      ScanState scanState,
+      ScanBloc bloc,
+      ) {
     if (scanState is ScanLoadingState ||
         scanState is ProductHistoryLoadingState) {
       return const Center(
