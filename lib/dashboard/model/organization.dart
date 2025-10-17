@@ -1,7 +1,10 @@
+// lib/dashboard/model/organization.dart
+
 import 'package:untitled/dashboard/model/user.dart';
 import 'package:web3dart/web3dart.dart';
 
 class Organization {
+  // Dữ liệu từ Smart Contract
   final String organizationName;
   final String ownerName;
   final String ownerAddress;
@@ -9,17 +12,31 @@ class Organization {
   final BigInt establishedDate;
   final int organizationStatus;
 
+  // Dữ liệu từ Firebase
+  final String? brandName;
+  final String? businessType;
+  final String? foundedYear;
+  final String? address;
+  final String? email;
+
   Organization({
+    // Dữ liệu từ Smart Contract
     required this.organizationName,
     required this.ownerName,
     required this.ownerAddress,
     required this.members,
     required this.establishedDate,
     required this.organizationStatus,
+
+    // Dữ liệu từ Firebase (có thể null)
+    this.brandName,
+    this.businessType,
+    this.foundedYear,
+    this.address,
+    this.email,
   });
 
   factory Organization.fromContract(List<dynamic> data) {
-    // Xử lý trường hợp contract có thể trả về mảng rỗng dưới dạng null.
     final List<dynamic> memberData = data.length > 3 && data[3] != null
         ? data[3] as List<dynamic>
         : [];
@@ -30,18 +47,14 @@ class Organization {
 
     return Organization(
       organizationName: data[0] as String,
-      // Tên Owner ban đầu sẽ là chuỗi rỗng hoặc giá trị từ Contract
-      // Nó sẽ được cập nhật bằng copyWith trong Bloc.
       ownerName: data[1] as String,
       ownerAddress: (data[2] as EthereumAddress).hex,
       members: members,
       establishedDate: data[4] as BigInt,
-      // Đọc giá trị enum từ contract (dưới dạng BigInt) và chuyển thành int.
       organizationStatus: (data[5] as BigInt).toInt(),
     );
   }
 
-  // 🛠️ PHƯƠNG THỨC COPYWITH ĐÃ ĐƯỢC THÊM VÀO
   Organization copyWith({
     String? organizationName,
     String? ownerName,
@@ -49,6 +62,12 @@ class Organization {
     List<User>? members,
     BigInt? establishedDate,
     int? organizationStatus,
+    // Thêm các trường từ Firebase
+    String? brandName,
+    String? businessType,
+    String? foundedYear,
+    String? address,
+    String? email,
   }) {
     return Organization(
       organizationName: organizationName ?? this.organizationName,
@@ -57,6 +76,12 @@ class Organization {
       members: members ?? this.members,
       establishedDate: establishedDate ?? this.establishedDate,
       organizationStatus: organizationStatus ?? this.organizationStatus,
+      // Gán giá trị mới hoặc giữ lại giá trị cũ
+      brandName: brandName ?? this.brandName,
+      businessType: businessType ?? this.businessType,
+      foundedYear: foundedYear ?? this.foundedYear,
+      address: address ?? this.address,
+      email: email ?? this.email,
     );
   }
 }

@@ -18,11 +18,12 @@ part 'organization_state.dart';
 class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
   final Web3Client web3client;
   final EthPrivateKey credentials;
+  // Giả sử authService được cung cấp qua DI hoặc một cách nào đó
+  final AuthService authService = AuthService();
 
   late DeployedContract deployedContract;
   bool _isContractLoaded = false;
 
-  // Khai báo các hàm trong Smart Contract sẽ sử dụng
   late ContractFunction _getUserFunction;
   late ContractFunction _getOrganizationFunction;
   late ContractFunction _addMemberFunction;
@@ -37,7 +38,6 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     on<RemoveMemberFromOrganization>(_onRemoveMember);
   }
 
-  /// Khởi tạo contract, load ABI và map các hàm cần thiết.
   Future<void> _initializeContract() async {
     if (_isContractLoaded) return;
 
@@ -80,7 +80,6 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     _isContractLoaded = true;
   }
 
-  /// Kiểm tra xem user hiện tại có phải là chủ sở hữu tổ chức hay không.
   Future<void> _checkIsOrganizationOwner() async {
     final address = credentials.address;
 
@@ -153,32 +152,54 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
       // 1. Lấy dữ liệu tổ chức thô từ Contract
       Organization org = Organization.fromContract(rawOrg);
 
-      // 2. Ánh xạ tên người dùng cho Owner
-      final ownerUsername = await authService.value.getUsernameByAddress(
+      // 2. LẤY DỮ LIỆU BỔ SUNG TỪ FIREBASE
+      developer.log(
+        "🔎 [Firebase] Bắt đầu tìm kiếm document với eth_address: ${org.ownerAddress}",
+      );
+      final firebaseData = await authService.getOrganizationDetailsByAddress(
         org.ownerAddress,
       );
-      org = org.copyWith(ownerName: ownerUsername ?? "Owner (Chưa có tên)");
+
+      if (firebaseData != null) {
+        developer.log(
+          "✅ [Firebase] Đã TÌM THẤY document trên Firebase. Bắt đầu hợp nhất dữ liệu.",
+        );
+        org = org.copyWith(
+          // ======================= SỬA LỖI TẠI ĐÂY =======================
+          // Sử dụng chính xác tên trường từ Firebase bạn cung cấp
+          brandName: firebaseData['brandName'] as String?,
+          businessType:
+              firebaseData['business type']
+                  as String?, // Sửa thành key có khoảng trắng
+          foundedYear: firebaseData['foundedYear'] as String?,
+          address: firebaseData['address'] as String?,
+          email:
+              firebaseData['e-mail']
+                  as String?, // Sửa thành key có dấu gạch nối
+          ownerName: firebaseData['fullName'] as String? ?? org.ownerName,
+          // ===============================================================
+        );
+        developer.log("✅ [Merge] Hợp nhất dữ liệu thành công!");
+      } else {
+        developer.log(
+          "❌ [Firebase] KHÔNG TÌM THẤY document nào trên Firebase khớp với địa chỉ ví: ${org.ownerAddress}",
+        );
+      }
 
       // 3. Ánh xạ tên người dùng cho từng thành viên (Members)
       final List<User> membersWithNames = [];
       for (var member in org.members) {
-        // Gọi hàm mới: getUsernameByAddress
-        final memberUsername = await authService.value.getUsernameByAddress(
+        final memberUsername = await authService.getUsernameByAddress(
           member.userId,
         );
-
-        // SỬA LỖI: member.role đã có sẵn, chỉ cần cập nhật userName
         membersWithNames.add(
           User(
             userId: member.userId,
-            // Sử dụng tên lấy từ Firebase, nếu null thì dùng placeholder
             userName: memberUsername ?? "Member (Chưa có tên)",
-            role: member.role, // Giữ lại role đã được lấy từ contract
+            role: member.role,
           ),
         );
       }
-
-      // 4. Cập nhật danh sách thành viên vào Organization
       org = org.copyWith(members: membersWithNames);
 
       developer.log(
@@ -197,9 +218,7 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     Emitter<OrganizationState> emit,
   ) async {
     final currentState = state;
-    if (currentState is OrganizationLoaded) {
-      emit(OrganizationLoaded(currentState.organization));
-    } else {
+    if (currentState is! OrganizationLoaded) {
       emit(OrganizationLoading());
     }
 
@@ -256,24 +275,20 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     } catch (e) {
       developer.log("❌ [OrgBloc] Lỗi khi thêm thành viên:", error: e);
       emit(OrganizationError("Lỗi khi thêm thành viên: ${e.toString()}"));
+    } finally {
+      if (currentState is OrganizationLoaded) {
+        emit(currentState); // Quay lại trạng thái loaded
+      }
     }
   }
 
-  /// ✅ Xử lý sự kiện thêm thành viên qua email
+  /// Xử lý sự kiện thêm thành viên qua email
   Future<void> _onAddMemberByEmail(
     AddMemberByEmail event,
     Emitter<OrganizationState> emit,
   ) async {
-    final currentState = state;
-    if (currentState is OrganizationLoaded) {
-      emit(OrganizationLoaded(currentState.organization)); // Giữ trạng thái cũ
-    } else {
-      emit(OrganizationLoading());
-    }
-
     try {
-      final auth = authService.value;
-      final targetUser = await auth.getUserWalletByEmail(event.email);
+      final targetUser = await authService.getUserWalletByEmail(event.email);
 
       if (targetUser == null) {
         emit(
@@ -302,15 +317,13 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     }
   }
 
-  /// 🟢 Xử lý sự kiện xóa thành viên (Owner removes Associate)
+  /// Xử lý sự kiện xóa thành viên (Owner removes Associate)
   Future<void> _onRemoveMember(
     RemoveMemberFromOrganization event,
     Emitter<OrganizationState> emit,
   ) async {
     final currentState = state;
-    if (currentState is OrganizationLoaded) {
-      emit(OrganizationLoaded(currentState.organization)); // Giữ trạng thái cũ
-    } else {
+    if (currentState is! OrganizationLoaded) {
       emit(OrganizationLoading());
     }
 
@@ -324,7 +337,7 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
         credentials,
         Transaction.callContract(
           contract: deployedContract,
-          function: _removeMemberFunction, // GỌI HÀM XÓA DÀNH CHO OWNER
+          function: _removeMemberFunction,
           parameters: [associateAddress],
         ),
         chainId: 1337,
@@ -335,6 +348,10 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
     } catch (e) {
       developer.log("❌ [OrgBloc] Lỗi khi xóa thành viên:", error: e);
       emit(OrganizationError("Lỗi khi xóa thành viên: ${e.toString()}"));
+    } finally {
+      if (currentState is OrganizationLoaded) {
+        emit(currentState); // Quay lại trạng thái loaded
+      }
     }
   }
 }

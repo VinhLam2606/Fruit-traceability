@@ -1,3 +1,5 @@
+// lib/dashboard/ui/organization_management_page.dart
+
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
@@ -8,10 +10,9 @@ import 'package:untitled/dashboard/model/user.dart';
 class OrganizationManagementPage extends StatelessWidget {
   const OrganizationManagementPage({super.key});
 
-  // --- Style constants ---
   static const List<Color> _backgroundGradient = [
-    Color(0xFF141E30), // Darker
-    Color(0xFF243B55), // Lighter
+    Color(0xFF141E30),
+    Color(0xFF243B55),
   ];
   static const Color _accentColor = Colors.greenAccent;
   static const Color _cardColor = Colors.white10;
@@ -19,7 +20,6 @@ class OrganizationManagementPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      // Apply background gradient to the whole page
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -28,12 +28,12 @@ class OrganizationManagementPage extends StatelessWidget {
         ),
       ),
       child: Scaffold(
-        backgroundColor: Colors.transparent, // Crucial for showing the gradient
+        backgroundColor: Colors.transparent,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           title: const Text(
-            "Organization Management", // Translated
+            "Organization Management",
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           iconTheme: const IconThemeData(color: Colors.white),
@@ -47,17 +47,14 @@ class OrganizationManagementPage extends StatelessWidget {
                   backgroundColor: _accentColor,
                 ),
               );
-              // Trigger a fetch right after a successful action
               context.read<OrganizationBloc>().add(FetchOrganizationDetails());
-            }
-            // ✅ Display error dialog
-            else if (state is OrganizationError) {
+            } else if (state is OrganizationError) {
               showDialog(
                 context: context,
                 builder: (_) => AlertDialog(
                   backgroundColor: const Color(0xFF243B55),
                   title: const Text(
-                    "Action Error", // Translated
+                    "Action Error",
                     style: TextStyle(color: _accentColor),
                   ),
                   content: Text(
@@ -85,19 +82,16 @@ class OrganizationManagementPage extends StatelessWidget {
             }
           },
           builder: (context, state) {
-            // 🔹 If loading
             if (state is OrganizationLoading) {
               return const Center(
                 child: CircularProgressIndicator(color: _accentColor),
               );
             }
 
-            // 🔹 If organization is loaded
             if (state is OrganizationLoaded) {
               return _buildLoadedView(context, state);
             }
 
-            // 🔹 If there's an error on initial load
             if (state is OrganizationError) {
               return Center(
                 child: Column(
@@ -106,7 +100,7 @@ class OrganizationManagementPage extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.all(24.0),
                       child: Text(
-                        "Error loading data:\n${state.error}", // Translated
+                        "Error loading data:\n${state.error}",
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.redAccent,
@@ -123,7 +117,7 @@ class OrganizationManagementPage extends StatelessWidget {
                       },
                       icon: const Icon(Icons.refresh, color: Colors.black),
                       label: const Text(
-                        "Retry", // Translated
+                        "Retry",
                         style: TextStyle(color: Colors.black),
                       ),
                       style: ElevatedButton.styleFrom(
@@ -145,7 +139,7 @@ class OrganizationManagementPage extends StatelessWidget {
 
             return const Center(
               child: Text(
-                "Initializing...", // Translated
+                "Initializing...",
                 style: TextStyle(color: Colors.white70),
               ),
             );
@@ -156,6 +150,7 @@ class OrganizationManagementPage extends StatelessWidget {
   }
 
   Widget _buildLoadedView(BuildContext context, OrganizationLoaded state) {
+    final org = state.organization;
     return RefreshIndicator(
       color: _accentColor,
       onRefresh: () async {
@@ -164,7 +159,7 @@ class OrganizationManagementPage extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(20.0),
         children: [
-          // Header Card
+          // Header Card with Firebase Data
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -179,30 +174,69 @@ class OrganizationManagementPage extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  state.organization.organizationName,
+                  org.brandName ?? org.organizationName, // Ưu tiên brandName
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
+                _buildInfoRow(
+                  Icons.business,
+                  "Business Type",
+                  org.businessType,
+                ),
+                _buildInfoRow(
+                  Icons.calendar_today,
+                  "Founded Year",
+                  org.foundedYear,
+                ),
+                _buildInfoRow(Icons.location_on, "Address", org.address),
+                _buildInfoRow(Icons.email, "Email", org.email),
+                const Divider(color: Colors.white24, height: 24),
                 Text(
-                  "Owner: ${state.organization.ownerName}",
+                  "Owner: ${org.ownerName}",
                   style: const TextStyle(color: Colors.white70, fontSize: 16),
                 ),
                 Text(
-                  "Owner Address: ${state.organization.ownerAddress.substring(0, 10)}...",
+                  "Owner Address: ${org.ownerAddress.substring(0, 10)}...",
                   style: const TextStyle(color: Colors.white54, fontSize: 12),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 30),
-          _buildMembersSection(
-            context,
-            state.organization.members,
-            state.organization.ownerAddress,
+          _buildMembersSection(context, org.members, org.ownerAddress),
+        ],
+      ),
+    );
+  }
+
+  // Helper widget để hiển thị một dòng thông tin
+  Widget _buildInfoRow(IconData icon, String label, String? value) {
+    if (value == null || value.isEmpty) {
+      return const SizedBox.shrink(); // Không hiển thị nếu không có dữ liệu
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, color: _accentColor, size: 16),
+          const SizedBox(width: 10),
+          Text(
+            "$label: ",
+            style: const TextStyle(
+              color: Colors.white70,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: Colors.white),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -221,7 +255,7 @@ class OrganizationManagementPage extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
-              "Members", // Translated
+              "Members",
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 20,
@@ -240,7 +274,7 @@ class OrganizationManagementPage extends StatelessWidget {
                 child: Padding(
                   padding: EdgeInsets.only(top: 20.0),
                   child: Text(
-                    "No members yet.", // Translated
+                    "No members yet.",
                     style: TextStyle(color: Colors.white54),
                   ),
                 ),
@@ -269,17 +303,15 @@ class OrganizationManagementPage extends StatelessWidget {
                           size: 20,
                         ),
                       ),
-                      // ✅ Ensure user NAME is displayed, otherwise show a placeholder
                       title: Text(
                         member.userName.isNotEmpty
                             ? member.userName
-                            : "User (Name not set)", // Translated
+                            : "User (Name not set)",
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      // Display shortened wallet address as subtitle
                       subtitle: Text(
                         member.userId.substring(0, 10) + "...",
                         style: const TextStyle(
@@ -316,7 +348,6 @@ class OrganizationManagementPage extends StatelessWidget {
     );
   }
 
-  /// 🔹 Add member by Email only
   void _showAddMemberDialog(BuildContext context) {
     final TextEditingController emailController = TextEditingController();
 
@@ -329,7 +360,7 @@ class OrganizationManagementPage extends StatelessWidget {
             borderRadius: BorderRadius.circular(15),
           ),
           title: const Text(
-            "Add New Member", // Translated
+            "Add New Member",
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           content: TextField(
@@ -337,7 +368,7 @@ class OrganizationManagementPage extends StatelessWidget {
             keyboardType: TextInputType.emailAddress,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              labelText: "Member's Email", // Translated
+              labelText: "Member's Email",
               labelStyle: const TextStyle(color: Colors.white70),
               hintText: "example@email.com",
               hintStyle: const TextStyle(color: Colors.white54),
@@ -355,7 +386,7 @@ class OrganizationManagementPage extends StatelessWidget {
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
               child: const Text(
-                "Cancel", // Translated
+                "Cancel",
                 style: TextStyle(color: Colors.redAccent),
               ),
             ),
@@ -365,9 +396,7 @@ class OrganizationManagementPage extends StatelessWidget {
                 if (email.isEmpty || !email.contains('@')) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text(
-                        "⚠️ Please enter a valid email address.",
-                      ), // Translated
+                      content: Text("⚠️ Please enter a valid email address."),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -385,7 +414,7 @@ class OrganizationManagementPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: const Text("Add"), // Translated
+              child: const Text("Add"),
             ),
           ],
         );

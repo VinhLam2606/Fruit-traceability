@@ -1,6 +1,5 @@
-// ignore_for_file: avoid_print, use_build_context_synchronously, deprecated_member_use
-
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:firebase_auth/firebase_auth.dart';
@@ -13,6 +12,8 @@ import 'package:untitled/auth/service/auth_service.dart';
 import 'package:untitled/auth/service/walletExt_service.dart';
 import 'package:web3dart/crypto.dart' as crypto;
 import 'package:web3dart/web3dart.dart';
+
+import 'organization_form_page.dart';
 
 class RegisterPage extends StatefulWidget {
   final Function()? onTap;
@@ -38,13 +39,11 @@ class _RegisterPageState extends State<RegisterPage> {
 
   static String providedPrivateKey = "";
   static String providedAddress = "";
-  static int nextAccountIndex = 0;
 
   @override
   void initState() {
     super.initState();
     ethClient = Web3Client("http://10.0.2.2:7545", http.Client());
-    initGanacheAdmin();
     _loadContract();
   }
 
@@ -57,6 +56,7 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
+  // 🧩 Lấy tất cả tài khoản Ganache
   Future<List<String>> getGanacheAccounts() async {
     final res = await http.post(
       Uri.parse("http://10.0.2.2:7545"),
@@ -76,88 +76,79 @@ class _RegisterPageState extends State<RegisterPage> {
     return [];
   }
 
+  // 🧩 Tạo private key từ mnemonic (Ganache mặc định)
   String derivePrivateKeyFromMnemonic(String mnemonic, {int accountIndex = 0}) {
-    // 1) words -> seed
     final words = mnemonic.trim().split(RegExp(r'\s+'));
     final seed = Mnemonic.toSeed(words);
-
-    // 2) wallet -> child key theo BIP44 của ETH
     final hdWallet = HDWallet.fromSeed(seed: seed);
     final path = "m/44'/60'/0'/0/$accountIndex";
-    final derivedKey = hdWallet.deriveChildKeyByPath(path); // dùng extension
-
-    // 3) private key -> hex
-    final hex0x = derivedKey.privateKeyHex0x; // dùng extension
-    print("✅ Derived private key (account $accountIndex): $hex0x");
-    return hex0x;
+    final derivedKey = hdWallet.deriveChildKeyByPath(path);
+    return derivedKey.privateKeyHex0x;
   }
 
-  Future<void> initGanacheAdmin() async {
+  // 🧩 Lấy tài khoản Ganache chưa dùng
+  Future<void> initGanacheAccount() async {
     const mnemonic =
-        "decorate foil consider depart section genuine plate person change file catch animal";
+        "pony cheese victory dismiss prize chair believe swing indicate wrong drip avoid";
 
     try {
       final ganacheAccounts = await getGanacheAccounts();
       if (ganacheAccounts.isEmpty) {
-        throw Exception("Ganache RPC returned no accounts.");
+        throw Exception("Không tìm thấy tài khoản Ganache nào!");
       }
 
-      // 🔹 Start with next available user index
-      final userCountSnap = await FirebaseFirestore.instance
-          .collection("users")
-          .get();
-      int accountIndex = userCountSnap.docs.length % 10;
+      final random = Random();
+      final usedAddresses = await _getUsedBlockchainAddresses();
+      final shuffledIndexes = List.generate(ganacheAccounts.length, (i) => i)
+        ..shuffle(random);
 
-      // 🔁 Loop through available Ganache-derived accounts (0–9)
-      for (int i = 0; i < 10; i++) {
-        final derivedIndex = (accountIndex + i) % 10;
-
-        // Derive private key & address
-        providedPrivateKey = derivePrivateKeyFromMnemonic(
+      for (final idx in shuffledIndexes) {
+        final privateKey = derivePrivateKeyFromMnemonic(
           mnemonic,
-          accountIndex: derivedIndex,
+          accountIndex: idx,
         );
+        final key = EthPrivateKey.fromHex(privateKey);
+        final address = await key.extractAddress();
 
-        final ethKey = EthPrivateKey.fromHex(providedPrivateKey);
-        final derivedAddress = await ethKey.extractAddress();
-        providedAddress = derivedAddress.hex;
+        if (usedAddresses.contains(address.hex)) continue;
 
-        // Check balance
-        final balance = await ethClient.getBalance(derivedAddress);
-        final ether = balance.getInEther;
+        final balance = await ethClient.getBalance(address);
+        if (balance.getInEther == BigInt.zero) continue;
 
-        // Skip if no funds
-        if (ether == BigInt.zero) {
-          print("⚪ Skipping Account #$derivedIndex → $providedAddress (0 ETH)");
-          continue;
-        }
-
-        // 🔍 Check if already registered on blockchain
-        final alreadyRegistered = await _isUserAlreadyRegistered(
-          EthereumAddress.fromHex(providedAddress),
-        );
-
+        final alreadyRegistered = await _isUserAlreadyRegistered(address);
         if (!alreadyRegistered) {
-          // ✅ Found available funded & unregistered account
-          nextAccountIndex = derivedIndex;
-          print("🟢 Selected new Ganache Account #$nextAccountIndex");
-          print("🔐 Private Key: $providedPrivateKey");
-          print("📮 Derived Address: $providedAddress");
-          print("💰 Balance: $ether ETH");
+          providedPrivateKey = privateKey;
+          providedAddress = address.hex;
+          print("🟢 Dùng tài khoản Ganache #$idx: $providedAddress");
           return;
-        } else {
-          print(
-            "🚫 Account #$derivedIndex already registered on-chain. Skipping...",
-          );
         }
       }
 
-      throw Exception("No funded & unregistered Ganache accounts available!");
+      throw Exception("Không còn tài khoản Ganache khả dụng!");
     } catch (e) {
-      print("❌ Failed to init Ganache admin: $e");
+      print("❌ Lỗi initGanacheAccount: $e");
+      rethrow;
     }
   }
 
+  // 🧩 Lấy danh sách ví đã dùng trên Firestore
+  Future<List<String>> _getUsedBlockchainAddresses() async {
+    final snapshot = await FirebaseFirestore.instance.collection("users").get();
+    final List<String> addresses = [];
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      if (data.containsKey("eth_address")) {
+        final addr = data["eth_address"];
+        if (addr is String && addr.isNotEmpty) {
+          addresses.add(addr);
+        }
+      }
+    }
+    return addresses;
+  }
+
+  // 🧩 Load ABI contract
   Future<void> _loadContract() async {
     try {
       final abiJson = jsonDecode(
@@ -172,28 +163,25 @@ class _RegisterPageState extends State<RegisterPage> {
         ContractAbi.fromJson(abi, "Chain"),
         contractAddr,
       );
-      print("✅ Chain contract loaded at $contractAddr");
+      print("✅ Contract loaded at $contractAddr");
     } catch (e) {
-      print("⚠️ Failed to load contract: $e");
+      print("⚠️ Lỗi load contract: $e");
     }
   }
 
+  // 🧩 Kiểm tra user đã đăng ký on-chain chưa
   Future<bool> _isUserAlreadyRegistered(EthereumAddress walletAddress) async {
     try {
-      if (usersContract == null) throw Exception("Contract not loaded");
-
+      if (usersContract == null) throw Exception("Contract chưa load");
       final fn = usersContract!.function("isRegisteredAuth");
-
       final result = await ethClient.call(
         contract: usersContract!,
         function: fn,
         params: [walletAddress],
       );
-
-      // Solidity bool → List<dynamic> → [true/false]
       return result.isNotEmpty && result.first == true;
     } catch (e) {
-      print("⚠️ Failed to check user registration: $e");
+      print("⚠️ Check registered error: $e");
       return false;
     }
   }
@@ -207,6 +195,7 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  // 🧩 Ghi user lên blockchain
   Future<String> _registerOnBlockchain(
     String username,
     String email,
@@ -214,12 +203,12 @@ class _RegisterPageState extends State<RegisterPage> {
     EthereumAddress walletAddress,
   ) async {
     if (usersContract == null) throw Exception("Contract not loaded");
-    final registerFn = usersContract!.function("registerUser");
+    final fn = usersContract!.function("registerUser");
     final txHash = await ethClient.sendTransaction(
       senderKey,
       Transaction.callContract(
         contract: usersContract!,
-        function: registerFn,
+        function: fn,
         parameters: [walletAddress, email],
       ),
       chainId: 1337,
@@ -228,6 +217,7 @@ class _RegisterPageState extends State<RegisterPage> {
     return txHash;
   }
 
+  // 🧩 Ghi tổ chức lên blockchain
   Future<String> _addOrganization(
     String orgName,
     EthPrivateKey senderKey,
@@ -251,7 +241,7 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Future<void> _waitForTx(String txHash) async {
-    print("⏳ Waiting for tx $txHash to be mined...");
+    print("⏳ Waiting for tx $txHash...");
     while (true) {
       final receipt = await ethClient.getTransactionReceipt(txHash);
       if (receipt != null) {
@@ -262,6 +252,7 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  // 🧩 Đăng ký tài khoản (Firebase + Blockchain)
   void register() async {
     if (!_formKey.currentState!.validate() || _isLoading) return;
     setState(() => _isLoading = true);
@@ -271,39 +262,20 @@ class _RegisterPageState extends State<RegisterPage> {
     final username = usernameController.text.trim();
 
     try {
-      // 🧩 Step 1 — Check blockchain availability
       if (!await _isBlockchainAvailable()) {
-        throw Exception("Không thể kết nối đến Ganache.");
+        throw Exception("Không thể kết nối tới Ganache!");
       }
 
-      // 🧩 Step 2 — Register user in Firebase first
-      print("🔥 Registering Firebase account for $email...");
-      final userCred = await authService.value.createAccount(
+      await initGanacheAccount();
+
+      final firebaseUser = await authService.value.createAccount(
         email: email,
         password: password,
       );
 
-      print("✅ Firebase user created → ${userCred.user!.uid}");
-
-      // 🧩 Step 3 — Derive Ethereum credentials
-      print("DEBUG private key: $providedPrivateKey");
-
       final credentials = EthPrivateKey.fromHex(providedPrivateKey);
       final walletAddress = EthereumAddress.fromHex(providedAddress);
 
-      print(
-        "🔎 Preparing blockchain registration for $username ($accountType)...",
-      );
-
-      // 🧩 Step 4 — Check if wallet already registered on blockchain
-      final alreadyExists = await _isUserAlreadyRegistered(walletAddress);
-      if (alreadyExists) {
-        throw Exception(
-          "This wallet address is already registered on blockchain!",
-        );
-      }
-
-      // 🧩 Step 5 — Register user on blockchain
       final regTx = await _registerOnBlockchain(
         username,
         email,
@@ -313,6 +285,7 @@ class _RegisterPageState extends State<RegisterPage> {
       await _waitForTx(regTx);
 
       String roleToSave = "Customer";
+
       if (accountType == "organization") {
         final orgTx = await _addOrganization("${username}_org", credentials);
         await _waitForTx(orgTx);
@@ -320,10 +293,9 @@ class _RegisterPageState extends State<RegisterPage> {
         roleToSave = "Manufacturer";
       }
 
-      // 🧩 Step 6 — Save full user info in Firestore
       await FirebaseFirestore.instance
           .collection("users")
-          .doc(userCred.user!.uid)
+          .doc(firebaseUser.user!.uid)
           .set({
             "username": username,
             "email": email,
@@ -337,33 +309,26 @@ class _RegisterPageState extends State<RegisterPage> {
             "createdAt": FieldValue.serverTimestamp(),
           });
 
-      print("🎉 Registration successful (Firebase + Blockchain)");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("✅ Đăng ký $roleToSave thành công!")),
+      );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("✅ Đăng ký $roleToSave thành công!"),
-            duration: const Duration(seconds: 1),
+      if (accountType == "organization") {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OrganizationFormPage(
+              ethAddress: providedAddress,
+              privateKey: providedPrivateKey,
+            ),
           ),
         );
-
-        await Future.delayed(const Duration(seconds: 1));
-
-        widget.onTap?.call();
       }
-    } on FirebaseAuthException catch (e) {
-      setState(() => errorMessage = e.message ?? "Firebase Auth error");
-      print("❌ FirebaseAuthException: $errorMessage");
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("❌ Lỗi Firebase: $errorMessage")));
     } catch (e) {
-      setState(() => errorMessage = e.toString());
-      print("❌ Lỗi đăng ký: $errorMessage");
+      print("❌ Lỗi đăng ký: $e");
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("❌ Lỗi đăng ký: $errorMessage")));
-
+      ).showSnackBar(SnackBar(content: Text("❌ Lỗi: $e")));
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
         await currentUser.delete();
@@ -373,6 +338,8 @@ class _RegisterPageState extends State<RegisterPage> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  // ---------------- UI ------------------
 
   @override
   Widget build(BuildContext context) {
@@ -419,7 +386,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                     const SizedBox(height: 40),
 
-                    // Account type dropdown
+                    // Account type
                     DropdownButtonFormField<String>(
                       initialValue: accountType,
                       dropdownColor: Colors.black,
@@ -435,8 +402,7 @@ class _RegisterPageState extends State<RegisterPage> {
                           child: Text("Organization (Manufacturer)"),
                         ),
                       ],
-                      onChanged: (value) =>
-                          setState(() => accountType = value!),
+                      onChanged: (v) => setState(() => accountType = v!),
                     ),
                     const SizedBox(height: 20),
 
@@ -474,7 +440,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Confirm password
+                    // Confirm Password
                     TextFormField(
                       controller: confirmPasswordController,
                       obscureText: true,
@@ -524,8 +490,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-
-        
 
                     Row(
                       children: const [

@@ -1,15 +1,22 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
-import 'package:web3dart/web3dart.dart';
 import 'package:untitled/auth/service/walletExt_service.dart';
 import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
 import 'package:untitled/navigation/main_navigation.dart';
+import 'package:web3dart/web3dart.dart';
 
 class OrganizationFormPage extends StatefulWidget {
-  const OrganizationFormPage({super.key});
+  final String ethAddress;
+  final String privateKey;
+
+  const OrganizationFormPage({
+    super.key,
+    required this.ethAddress,
+    required this.privateKey,
+  });
 
   @override
   State<OrganizationFormPage> createState() => _OrganizationFormPageState();
@@ -57,6 +64,8 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
             "foundedYear": foundedYearController.text.trim(),
             "address": addressController.text.trim(),
             "email": emailController.text.trim(),
+            "eth_address": widget.ethAddress,
+            "private_key": widget.privateKey,
             "createdAt": FieldValue.serverTimestamp(),
           });
 
