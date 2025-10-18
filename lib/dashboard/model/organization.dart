@@ -18,6 +18,7 @@ class Organization {
   final String? foundedYear;
   final String? address;
   final String? email;
+  final String? phoneNumber;
 
   Organization({
     // Dữ liệu từ Smart Contract
@@ -34,6 +35,7 @@ class Organization {
     this.foundedYear,
     this.address,
     this.email,
+    this.phoneNumber,
   });
 
   factory Organization.fromContract(List<dynamic> data) {
@@ -68,6 +70,7 @@ class Organization {
     String? foundedYear,
     String? address,
     String? email,
+    String? phoneNumber,
   }) {
     return Organization(
       organizationName: organizationName ?? this.organizationName,
@@ -82,6 +85,7 @@ class Organization {
       foundedYear: foundedYear ?? this.foundedYear,
       address: address ?? this.address,
       email: email ?? this.email,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
     );
   }
 }

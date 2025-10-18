@@ -193,6 +193,7 @@ class OrganizationManagementPage extends StatelessWidget {
                   org.foundedYear,
                 ),
                 _buildInfoRow(Icons.location_on, "Address", org.address),
+                _buildInfoRow(Icons.phone, "Phone", org.phoneNumber),
                 _buildInfoRow(Icons.email, "Email", org.email),
                 const Divider(color: Colors.white24, height: 24),
                 Text(

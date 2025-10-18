@@ -299,7 +299,7 @@ class AuthService extends ChangeNotifier {
         "🔎 [AuthService] Đang tìm chi tiết tổ chức theo address: $ethAddress",
       );
       final querySnapshot = await _firestore
-          .collection('users')
+          .collection('organizations')
           .where('eth_address', isEqualTo: ethAddress.toLowerCase())
           .limit(1)
           .get();

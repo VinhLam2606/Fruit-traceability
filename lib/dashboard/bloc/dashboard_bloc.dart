@@ -33,9 +33,10 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     on<DashboardInitialFetchEvent>(_dashboardInitialFetchEvent);
     on<CreateProductButtonPressedEvent>(_createProductButtonPressedEvent);
     on<FetchProductsEvent>(_fetchProductsEvent);
-    // Đã đăng ký handler chuyển giao
     on<TransferProductEvent>(_transferProductEvent);
   }
+
+  // ... (Hàm _dashboardInitialFetchEvent và _checkManufacturer giữ nguyên) ...
 
   FutureOr<void> _dashboardInitialFetchEvent(
     DashboardInitialFetchEvent event,
@@ -46,13 +47,11 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final address = credentials.address;
       developer.log("🔓 [Init] Public address: ${address.hex}");
 
-      // Kiểm tra số dư ví (để đảm bảo tx hợp lệ)
       final balance = await web3client.getBalance(address);
       developer.log(
         "💰 Balance: ${balance.getValueInUnit(EtherUnit.ether)} ETH",
       );
 
-      // --- Load ABI ---
       final abiString = await rootBundle.loadString(
         "build/contracts/Chain.json",
       );
@@ -78,20 +77,17 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       deployedContract = DeployedContract(abi, contractAddress);
       developer.log("📌 Contract address: $contractAddress");
 
-      // --- Map hàm Solidity ---
       _addProductFunction = deployedContract.function('addAProduct');
       _getProductsByUserFunction = deployedContract.function(
         'getProductsByUser',
       );
       _isRegisteredFunction = deployedContract.function('isRegisteredAuth');
       _getUserFunction = deployedContract.function('getUser');
-      // ÁNH XẠ CÁC HÀM MỚI
       _transferProductFunction = deployedContract.function('transferProduct');
       _getOrganizationOwnerFunction = deployedContract.function(
         'getOrganizationOwner',
       );
 
-      // --- Kiểm tra role ---
       await _checkManufacturer(address);
 
       emit(DashboardInitialSuccessState());
@@ -103,7 +99,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   }
 
   Future<void> _checkManufacturer(EthereumAddress address) async {
-    // 1️⃣ Kiểm tra đã register chưa
     final isRegisteredResult = await web3client.call(
       contract: deployedContract,
       function: _isRegisteredFunction,
@@ -115,7 +110,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       throw Exception("❌ User chưa được register → cần đăng ký trước.");
     }
 
-    // 2️⃣ Lấy thông tin user struct
     final userData = await web3client.call(
       contract: deployedContract,
       function: _getUserFunction,
@@ -126,7 +120,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       throw Exception("❌ Không lấy được dữ liệu user từ blockchain.");
     }
 
-    // Lấy thông tin chi tiết user
     final List<dynamic> userStruct = userData[0] as List<dynamic>;
 
     if (userStruct.length < 4) {
@@ -145,6 +138,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     developer.log("✅ User là Manufacturer và thuộc Organization → OK");
   }
 
+  // ==================== 💡 HÀM 1 ĐƯỢC CẬP NHẬT ====================
   FutureOr<void> _createProductButtonPressedEvent(
     CreateProductButtonPressedEvent event,
     Emitter<DashboardState> emit,
@@ -156,7 +150,14 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         Transaction.callContract(
           contract: deployedContract,
           function: _addProductFunction,
-          parameters: [event.batchId, event.name, BigInt.from(event.date)],
+          // Cập nhật tham số để khớp với contract
+          parameters: [
+            event.batchId,
+            event.name,
+            BigInt.from(event.date),
+            event.seedVariety, // Thêm seedVariety
+            event.origin, // Thêm origin
+          ],
         ),
         chainId: 1337,
       );
@@ -169,14 +170,14 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     }
   }
 
-  // Xử lý chuyển giao sản phẩm
+  // ==================== HÀM Chuyển giao (Giữ nguyên) ====================
   FutureOr<void> _transferProductEvent(
     TransferProductEvent event,
     Emitter<DashboardState> emit,
   ) async {
     emit(DashboardLoadingState());
     try {
-      // 1. Tra cứu địa chỉ ví của chủ sở hữu tổ chức nhận từ tên tổ chức
+      // 1. Tra cứu địa chỉ ví của chủ sở hữu tổ chức nhận
       final ownerResult = await web3client.call(
         contract: deployedContract,
         function: _getOrganizationOwnerFunction,
@@ -186,11 +187,15 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final receiverAddress = ownerResult[0] as EthereumAddress;
 
       // Kiểm tra địa chỉ có hợp lệ không (address(0) nếu không tìm thấy)
-      // 🟢 SỬA LỖI Ở ĐÂY: Dùng .hex thay vì .toHex()
       if (receiverAddress.hex == "0x0000000000000000000000000000000000000000") {
-        throw Exception(
-          "❌ Không tìm thấy Organization Owner với ID/Name: ${event.receiverOrganizationId}",
+        // Thay vì throw Exception, emit một lỗi có thông báo rõ ràng
+        emit(
+          DashboardErrorState(
+            "Không tìm thấy tổ chức với ID '${event.receiverOrganizationId}'. Vui lòng kiểm tra lại.",
+          ),
         );
+        // Dừng hàm tại đây
+        return;
       }
 
       // 2. Gửi giao dịch chuyển giao sản phẩm
@@ -205,27 +210,36 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       );
 
       developer.log("✅ Product transferred! TxHash: $txHash");
-      emit(DashboardSuccessState("✅ Product transferred! TxHash: $txHash"));
+      emit(DashboardSuccessState("✅ Chuyển giao sản phẩm thành công!"));
 
       // Sau khi chuyển giao xong, fetch lại danh sách sản phẩm
       add(FetchProductsEvent());
     } catch (e, st) {
       developer.log("❌ [TransferProduct] Failed", error: e, stackTrace: st);
-      emit(DashboardErrorState("❌ Failed to transfer product: $e"));
+      emit(DashboardErrorState("❌ Lỗi khi chuyển giao sản phẩm: $e"));
     }
   }
+  // ===============================================================
 
+  // ==================== 💡 HÀM 2 ĐƯỢC CẬP NHẬT ====================
   Future<void> createProductDirectly({
     required String batchId,
     required String name,
     required int date,
+    required String seedVariety, // Thêm tham số
+    required String origin, // Thêm tham số
   }) async {
     add(
-      CreateProductButtonPressedEvent(batchId: batchId, name: name, date: date),
+      CreateProductButtonPressedEvent(
+        batchId: batchId,
+        name: name,
+        date: date,
+        seedVariety: seedVariety, // Truyền tham số
+        origin: origin, // Truyền tham số
+      ),
     );
 
-    // Đợi đến khi hoàn tất (nếu bạn có stream trạng thái)
-    await Future.delayed(const Duration(seconds: 10)); // tuỳ thời gian mạng
+    await Future.delayed(const Duration(seconds: 10));
   }
 
   FutureOr<void> _fetchProductsEvent(

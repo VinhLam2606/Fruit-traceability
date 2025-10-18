@@ -165,19 +165,13 @@ class OrganizationBloc extends Bloc<OrganizationEvent, OrganizationState> {
           "✅ [Firebase] Đã TÌM THẤY document trên Firebase. Bắt đầu hợp nhất dữ liệu.",
         );
         org = org.copyWith(
-          // ======================= SỬA LỖI TẠI ĐÂY =======================
-          // Sử dụng chính xác tên trường từ Firebase bạn cung cấp
           brandName: firebaseData['brandName'] as String?,
-          businessType:
-              firebaseData['business type']
-                  as String?, // Sửa thành key có khoảng trắng
+          businessType: firebaseData['business type'] as String?,
           foundedYear: firebaseData['foundedYear'] as String?,
           address: firebaseData['address'] as String?,
-          email:
-              firebaseData['e-mail']
-                  as String?, // Sửa thành key có dấu gạch nối
+          email: firebaseData['email'] as String?,
+          phoneNumber: firebaseData['phoneNumber'] as String?,
           ownerName: firebaseData['fullName'] as String? ?? org.ownerName,
-          // ===============================================================
         );
         developer.log("✅ [Merge] Hợp nhất dữ liệu thành công!");
       } else {

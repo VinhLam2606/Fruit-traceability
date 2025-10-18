@@ -61,6 +61,8 @@ library Types {
         uint256 date;
         address currentOwner;
         string status;
+        string seedVariety;
+        string origin;
         Types.ProcessStep[] processSteps;
     }
 

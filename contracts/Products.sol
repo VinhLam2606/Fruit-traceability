@@ -67,7 +67,9 @@ contract Products is Users {
     function addAProduct(
         string memory batchId,
         string memory name_,
-        uint256 date_
+        uint256 date_,
+        string memory seedVariety_,
+        string memory origin_
     ) public onlyOrganizationManufacturer {
         if (bytes(batchId).length == 0) revert BatchNotExist();
         if (batchIdExists[batchId]) revert BatchExists();
@@ -90,6 +92,8 @@ contract Products is Users {
         p.date = date_;
         p.currentOwner = msg.sender;
         p.status = "Created";
+        p.seedVariety = seedVariety_;
+        p.origin = origin_;
         // processSteps is automatically empty when created
 
         productIndexByBatchId[batchId] = idx;

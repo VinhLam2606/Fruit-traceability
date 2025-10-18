@@ -13,11 +13,15 @@ class CreateProductButtonPressedEvent extends DashboardEvent {
   final String batchId;
   final String name;
   final int date;
+  final String seedVariety;
+  final String origin;
 
   CreateProductButtonPressedEvent({
     required this.batchId,
     required this.name,
     required this.date,
+    required this.seedVariety,
+    required this.origin,
   });
 }
 

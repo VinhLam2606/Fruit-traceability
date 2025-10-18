@@ -28,9 +28,11 @@ class CreateProductView extends StatefulWidget {
 
 class _CreateProductViewState extends State<CreateProductView> {
   final TextEditingController nameController = TextEditingController();
+  final TextEditingController seedVarietyController = TextEditingController();
   final TextEditingController quantityController = TextEditingController(
     text: '1',
   );
+  final TextEditingController originController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
   static const List<Color> _backgroundGradient = [
@@ -59,6 +61,8 @@ class _CreateProductViewState extends State<CreateProductView> {
   @override
   void dispose() {
     nameController.dispose();
+    seedVarietyController.dispose();
+    originController.dispose();
     quantityController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -104,8 +108,8 @@ class _CreateProductViewState extends State<CreateProductView> {
           builder: (context, state) {
             final isLoading =
                 _isProcessing ||
-                    (state is DashboardLoadingState &&
-                        state is! ProductsLoadedState);
+                (state is DashboardLoadingState &&
+                    state is! ProductsLoadedState);
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -132,6 +136,17 @@ class _CreateProductViewState extends State<CreateProductView> {
           controller: nameController,
           style: const TextStyle(color: Colors.white),
           decoration: _inputDecoration('Product Name'),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: seedVarietyController,
+          style: const TextStyle(color: Colors.white),
+          decoration: _inputDecoration('Seed Variety (e.g., Cát Hòa Lộc)'),
+        ),
+        TextField(
+          controller: originController,
+          style: const TextStyle(color: Colors.white),
+          decoration: _inputDecoration('Origin (e.g., Đồng Tháp)'),
         ),
         const SizedBox(height: 16),
         TextField(
@@ -189,14 +204,19 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 
   Future<void> _createProductsSequentially(
-      BuildContext context,
-      bool generatePdf,
-      ) async {
+    BuildContext context,
+    bool generatePdf,
+  ) async {
     final int quantity = int.tryParse(quantityController.text) ?? 1;
     final int currentTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final String baseName = nameController.text.trim();
+    final String seedVariety = seedVarietyController.text.trim();
+    final String origin = originController.text.trim();
 
-    if (baseName.isEmpty || quantity <= 0) {
+    if (baseName.isEmpty ||
+        quantity <= 0 ||
+        seedVariety.isEmpty ||
+        origin.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Please enter valid product info."),
@@ -226,6 +246,8 @@ class _CreateProductViewState extends State<CreateProductView> {
           date: BigInt.from(currentTimestamp),
           currentOwner: "0x0",
           status: "Created",
+          seedVariety: seedVariety,
+          origin: origin,
           processSteps: [],
         );
 
@@ -236,6 +258,8 @@ class _CreateProductViewState extends State<CreateProductView> {
             batchId: generatedBatchId,
             name: name,
             date: currentTimestamp,
+            seedVariety: seedVariety,
+            origin: origin,
           ),
         );
 
@@ -247,6 +271,8 @@ class _CreateProductViewState extends State<CreateProductView> {
       }
 
       nameController.clear();
+      seedVarietyController.clear();
+      originController.clear();
       quantityController.text = '1';
     } finally {
       _hideLoadingDialog(context);
@@ -370,10 +396,10 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 
   Widget _buildProductList(
-      BuildContext context,
-      DashboardState state,
-      bool isLoading,
-      ) {
+    BuildContext context,
+    DashboardState state,
+    bool isLoading,
+  ) {
     final products = state is ProductsLoadedState
         ? state.products.reversed.toList()
         : <Product>[];
@@ -398,8 +424,8 @@ class _CreateProductViewState extends State<CreateProductView> {
                 onPressed: isLoading
                     ? null
                     : () {
-                  context.read<DashboardBloc>().add(FetchProductsEvent());
-                },
+                        context.read<DashboardBloc>().add(FetchProductsEvent());
+                      },
               ),
             ],
           ),
@@ -522,8 +548,14 @@ class ProductDetailsDialog extends StatelessWidget {
               const Divider(color: Colors.white24, height: 24),
               _buildDetailRow("Status:", product.status),
               _buildDetailRow("Created Date:", _formatTimestamp(product.date)),
+              _buildDetailRow("Seed Variety:", product.seedVariety),
+              _buildDetailRow("Origin:", product.origin),
               _buildDetailRow("Creator:", product.creator, isAddress: true),
-              _buildDetailRow("Current Owner:", product.currentOwner, isAddress: true),
+              _buildDetailRow(
+                "Current Owner:",
+                product.currentOwner,
+                isAddress: true,
+              ),
               _buildDetailRow("Organization:", product.organizationName),
               const SizedBox(height: 20),
               _buildProcessSteps(),
@@ -604,10 +636,7 @@ class ProductDetailsDialog extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            step.description,
-            style: const TextStyle(color: Colors.white70),
-          ),
+          Text(step.description, style: const TextStyle(color: Colors.white70)),
           const Divider(color: Colors.white12, height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

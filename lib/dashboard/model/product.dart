@@ -38,7 +38,6 @@ class ProcessStep {
   };
 }
 
-
 class Product {
   final String batchId;
   final String name;
@@ -47,6 +46,8 @@ class Product {
   final BigInt date;
   final String currentOwner;
   final String status;
+  final String seedVariety;
+  final String origin;
   final List<ProcessStep> processSteps;
 
   Product({
@@ -57,19 +58,24 @@ class Product {
     required this.date,
     required this.currentOwner,
     required this.status,
+    required this.seedVariety, // Sửa thứ tự
+    required this.origin, // Sửa thứ tự
     required this.processSteps,
   });
 
   factory Product.fromContract(List<dynamic> contractData) {
-    if (contractData.length != 8) {
-      throw FormatException("Dữ liệu hợp đồng sản phẩm không hợp lệ: $contractData");
+    // Sửa lỗi #1: Kiểm tra 9 trường là đúng
+    if (contractData.length != 10) {
+      throw FormatException(
+        "Dữ liệu hợp đồng sản phẩm không hợp lệ (mong đợi 10, nhận ${contractData.length}): $contractData",
+      );
     }
 
-    // Parse danh sách các bước quy trình (ProcessStep[])
-    final rawSteps = contractData[7] as List<dynamic>;
-    final steps = rawSteps
-        .map((step) => ProcessStep.fromContract(step as List<dynamic>))
-        .toList();
+    // Sửa lỗi #2: Xóa 4 dòng cố đọc contractData[9]
+    // final rawSteps = contractData[9] as List<dynamic>; // <-- LỖI
+    // final steps = rawSteps
+    //     .map((step) => ProcessStep.fromContract(step as List<dynamic>))
+    //     .toList();
 
     return Product(
       batchId: contractData[0] as String,
@@ -79,7 +85,10 @@ class Product {
       date: contractData[4] as BigInt,
       currentOwner: (contractData[5] as EthereumAddress).hex,
       status: contractData[6] as String,
-      processSteps: steps,
+      seedVariety: contractData[7] as String, // Index 7
+      origin: contractData[8] as String, // Index 8
+      // Sửa lỗi #3: Khởi tạo danh sách rỗng
+      processSteps: [], // Thay vì `steps`
     );
   }
 
@@ -91,12 +100,14 @@ class Product {
     'date': date.toString(),
     'currentOwner': currentOwner,
     'status': status,
+    'seedVariety': seedVariety,
+    'origin': origin,
     'processSteps': processSteps.map((step) => step.toJson()).toList(),
   };
 
   @override
   String toString() =>
       'Product(batchId: $batchId, name: $name, org: $organizationName, '
-          'creator: $creator, date: $date, owner: $currentOwner, status: $status,'
-          'processSteps: ${processSteps.length})';
+      'creator: $creator, date: $date, owner: $currentOwner, status: $status, seed: $seedVariety, origin: $origin,'
+      'processSteps: ${processSteps.length})';
 }

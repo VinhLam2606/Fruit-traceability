@@ -31,7 +31,7 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
   final foundedYearController = TextEditingController();
   final addressController = TextEditingController();
   final emailController = TextEditingController();
-
+  final phoneController = TextEditingController();
   bool _isSaving = false;
 
   @override
@@ -42,6 +42,7 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
     foundedYearController.dispose();
     addressController.dispose();
     emailController.dispose();
+    phoneController.dispose();
     super.dispose();
   }
 
@@ -63,6 +64,7 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
             "businessType": businessTypeController.text.trim(),
             "foundedYear": foundedYearController.text.trim(),
             "address": addressController.text.trim(),
+            "phoneNumber": phoneController.text.trim(),
             "email": emailController.text.trim(),
             "eth_address": widget.ethAddress,
             "private_key": widget.privateKey,
@@ -175,6 +177,11 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
                 keyboardType: TextInputType.number,
               ),
               _buildField("Address", addressController),
+              _buildField(
+                "Phone Number",
+                phoneController,
+                keyboardType: TextInputType.phone,
+              ),
               _buildField(
                 "Contact Email",
                 emailController,
