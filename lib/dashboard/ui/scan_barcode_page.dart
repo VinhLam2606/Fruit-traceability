@@ -288,7 +288,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
-  // ... (Các hàm build khác không có thay đổi)
   Widget _buildScannerSection(ScanBloc scanBloc) {
     return Container(
       padding: const EdgeInsets.only(top: 80),
@@ -481,6 +480,27 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     return const SizedBox.shrink();
   }
 
+  // === HÀM MỚI: Helper để tạo nhóm thông tin ===
+  Widget _buildInfoGroup(String title, List<Widget> children) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.greenAccent, // Màu nhấn cho tiêu đề nhóm
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...children, // Thêm các _infoRow vào đây
+        const SizedBox(height: 16), // Khoảng cách giữa các nhóm
+      ],
+    );
+  }
+
+  // === HÀM ĐƯỢC VIẾT LẠI: Gom nhóm thông tin ===
   Widget _buildProductHeader(BuildContext context, Product product) {
     return Container(
       decoration: BoxDecoration(
@@ -495,6 +515,7 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Tiêu đề chính (Tên sản phẩm)
           Text(
             product.name,
             style: const TextStyle(
@@ -504,44 +525,33 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
             ),
           ),
           const Divider(color: Colors.white38, height: 25),
-          _infoRow('Batch ID', product.batchId, isAddress: true),
-          _infoRow('Organization', product.organizationName),
-          _infoRow('Date Created', DateTime.fromMillisecondsSinceEpoch(product.date.toInt() * 1000).toLocal().toString().split(' ')[0]),
-          _infoRow('Current Owner', product.currentOwner, isAddress: true),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildHistoryItemCard(ProductHistory h) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.15)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            h.note,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.greenAccent,
-              fontSize: 15,
-            ),
+          // --- Nhóm 1: Thông tin Truy xuất ---
+          _buildInfoGroup(
+            "Tracking Information",
+            [
+              _infoRow('Batch ID', product.batchId, isAddress: true),
+              _infoRow('Status', product.status),
+              _infoRow('Current Owner', product.currentOwner, isAddress: true),
+              _infoRow('Organization', product.organizationName),
+            ],
           ),
-          const SizedBox(height: 6),
-          _historyDetailRow('From', h.from),
-          _historyDetailRow('To', h.to),
-          _historyDetailRow('Time', h.dateTime.toString().split('.')[0]),
+
+          // --- Nhóm 2: Chi tiết Sản phẩm ---
+          _buildInfoGroup(
+            "Product Details",
+            [
+              _infoRow('Seed Variety', product.seedVariety),
+              _infoRow('Origin', product.origin),
+              _infoRow('Date Created', DateTime.fromMillisecondsSinceEpoch(product.date.toInt() * 1000).toLocal().toString().split(' ')[0]),
+            ],
+          ),
         ],
       ),
     );
   }
 
+  // === HÀM NÀY GIỮ NGUYÊN (dùng cho _buildInfoGroup) ===
   Widget _infoRow(String title, String value, {bool isAddress = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -592,6 +602,35 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryItemCard(ProductHistory h) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            h.note,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.greenAccent,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 6),
+          _historyDetailRow('From', h.from),
+          _historyDetailRow('To', h.to),
+          _historyDetailRow('Time', h.dateTime.toString().split('.')[0]),
         ],
       ),
     );

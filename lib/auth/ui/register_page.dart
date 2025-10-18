@@ -89,7 +89,7 @@ class _RegisterPageState extends State<RegisterPage> {
   // 🧩 Lấy tài khoản Ganache chưa dùng
   Future<void> initGanacheAccount() async {
     const mnemonic =
-        "pony cheese victory dismiss prize chair believe swing indicate wrong drip avoid";
+        "decorate foil consider depart section genuine plate person change file catch animal";
 
     try {
       final ganacheAccounts = await getGanacheAccounts();
