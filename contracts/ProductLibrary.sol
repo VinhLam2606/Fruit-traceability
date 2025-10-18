@@ -23,14 +23,16 @@ library ProductLibrary {
         string memory batchId,
         address from,
         address to,
-        string memory note
+        string memory note,
+        Types.HistoryType historyType
     ) internal {
         productHistories[batchId].push(Types.ProductHistory({
             batchId: batchId,
             from: from,
             to: to,
             timestamp: block.timestamp,
-            note: note
+            note: note,
+            historyType: historyType
         }));
     }
 

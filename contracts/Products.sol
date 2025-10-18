@@ -100,7 +100,7 @@ contract Products is Users {
         batchIdExists[batchId] = true;
         userOwnedProductIndices[msg.sender].push(idx);
 
-        productHistories.addProductHistory(batchId, address(0), msg.sender, "Product Created");
+        productHistories.addProductHistory(batchId, address(0), msg.sender, "Product Created", Types.HistoryType.Create);
         emit ProductAdded(batchId, name_, orgName, msg.sender, block.timestamp);
     }
 
@@ -127,7 +127,7 @@ contract Products is Users {
         userOwnedProductIndices.removeProductIndexFromUser(from, idx);
         userOwnedProductIndices[to].push(idx);
 
-        productHistories.addProductHistory(batchId, from, to, "Transferred");
+        productHistories.addProductHistory(batchId, from, to, "Transferred", Types.HistoryType.Transferred);
         emit ProductTransferred(batchId, from, to, block.timestamp);
     }
 
@@ -157,7 +157,7 @@ contract Products is Users {
         productProcesses[batchId].push(ps);
 
         // record history (performed by msg.sender, to = msg.sender for process action)
-        productHistories.addProductHistory(batchId, msg.sender, msg.sender, string(abi.encodePacked("Process added: ", processName)));
+        productHistories.addProductHistory(batchId, msg.sender, msg.sender, string(abi.encodePacked("Process added: ", processName)), Types.HistoryType.Processed);
 
         emit ProductProcessAdded(batchId, processName, uint8(processType), orgName, msg.sender, block.timestamp);
     }

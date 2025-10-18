@@ -71,11 +71,10 @@ class Product {
       );
     }
 
-    // Sửa lỗi #2: Xóa 4 dòng cố đọc contractData[9]
-    // final rawSteps = contractData[9] as List<dynamic>; // <-- LỖI
-    // final steps = rawSteps
-    //     .map((step) => ProcessStep.fromContract(step as List<dynamic>))
-    //     .toList();
+    final rawSteps = contractData[9] as List<dynamic>;
+    final steps = rawSteps
+        .map((step) => ProcessStep.fromContract(step as List<dynamic>))
+        .toList();
 
     return Product(
       batchId: contractData[0] as String,
@@ -87,8 +86,7 @@ class Product {
       status: contractData[6] as String,
       seedVariety: contractData[7] as String, // Index 7
       origin: contractData[8] as String, // Index 8
-      // Sửa lỗi #3: Khởi tạo danh sách rỗng
-      processSteps: [], // Thay vì `steps`
+      processSteps: steps,
     );
   }
 

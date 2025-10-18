@@ -21,7 +21,7 @@ class ProductInfoLoadedState extends ScanState {
   ProductInfoLoadedState({
     required this.product,
     this.history,
-    this.historyErrorMessage, // Thêm vào constructor
+    this.historyErrorMessage,
   });
 
   ProductInfoLoadedState copyWith({
@@ -44,15 +44,16 @@ final class ProductHistoryLoadingState extends ProductInfoLoadedState {
   });
 }
 
+// === THAY ĐỔI: State này giờ chứa danh sách timeline đã gộp ===
 class ProductDetailsLoadedState extends ProductInfoLoadedState {
-  @override
-  final List<ProductHistory> history;
+  // `history` trong state cha (ProductInfoLoadedState) sẽ là null
+  final List<TimelineItem> timeline; // <-- Dùng model timeline mới
 
   ProductDetailsLoadedState({
     required super.product,
-    required this.history,
+    required this.timeline, // <-- Danh sách đã gộp
     super.historyErrorMessage,
   }) : super(
-         history: history,
-       );
+    history: null, // Không dùng `history` gốc nữa
+  );
 }

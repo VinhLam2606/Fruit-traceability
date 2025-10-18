@@ -24,6 +24,12 @@ library Types {
         Distribution   // Phân phối
     }
 
+    enum HistoryType {
+         Create,
+         Transferred,
+         Processed
+    }
+
     struct UserHistory {
         address _userID;
         uint256 _timestamp;
@@ -72,5 +78,6 @@ library Types {
         address to;
         uint256 timestamp;
         string note;
+        HistoryType historyType;
     }
 }

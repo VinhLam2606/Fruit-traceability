@@ -10,6 +10,8 @@ import 'package:untitled/dashboard/bloc/user_organization_bloc.dart';
 import 'package:untitled/dashboard/bloc/scan_bloc.dart';
 import 'package:untitled/dashboard/model/product.dart';
 import 'package:untitled/dashboard/model/productHistory.dart';
+// === THÊM MỚI: Import model timeline ===
+import 'package:untitled/dashboard/model/timeline_item.dart';
 
 class ScanBarcodePage extends StatefulWidget {
   const ScanBarcodePage({super.key});
@@ -30,11 +32,13 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
 
   @override
   void initState() {
+    // (Giữ nguyên)
     super.initState();
     _controller = MobileScannerController(detectionTimeoutMs: 1000);
   }
 
   void _startNewScan() {
+    // (Giữ nguyên)
     if (_isDisposed) return;
     setState(() {
       _lastScannedCode = null;
@@ -46,23 +50,21 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
 
   @override
   void dispose() {
+    // (Giữ nguyên)
     _isDisposed = true;
     _controller.dispose();
     _batchIdController.dispose();
     super.dispose();
   }
 
-  /// ✅ 2. SỬA LẠI: Kiểm tra xem user có thuộc tổ chức nào không
-  /// bằng cách đọc từ UserOrganizationBloc.
   bool _hasOrganization(BuildContext context) {
-    // Dùng context.watch để widget tự động cập nhật khi trạng thái BLoC thay đổi.
+    // (Giữ nguyên)
     final orgState = context.watch<UserOrganizationBloc>().state;
     return orgState is UserOrganizationLoaded;
   }
 
-  /// ✅ 3. SỬA LẠI: Lấy tên tổ chức từ UserOrganizationBloc.
   String? _getOrganizationName(BuildContext context) {
-    // Dùng context.read vì chỉ cần đọc giá trị hiện tại, không cần lắng nghe thay đổi.
+    // (Giữ nguyên)
     final state = context.read<UserOrganizationBloc>().state;
     if (state is UserOrganizationLoaded) {
       return state.organization.organizationName;
@@ -70,15 +72,13 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     return null;
   }
 
-  /// Dialog để thêm một bước quy trình mới
   Future<void> _showAddProcessDialog(Product product) async {
+    // (Giữ nguyên)
     final processNameController = TextEditingController();
     final descriptionController = TextEditingController();
     final scanBloc = context.read<ScanBloc>();
-    int selectedProcessTypeIndex = 0; // Mặc định là 'Cultivation'
-
+    int selectedProcessTypeIndex = 0;
     if (!mounted) return;
-
     return showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -159,6 +159,7 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
   }
 
   InputDecoration _dialogInputDecoration(String hint) {
+    // (Giữ nguyên)
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(color: Colors.white54),
@@ -170,8 +171,8 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
 
   @override
   Widget build(BuildContext context) {
+    // (Giữ nguyên)
     final scanBloc = context.read<ScanBloc>();
-
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -224,11 +225,15 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
+  // === THAY ĐỔI LỚN: VIẾT LẠI HOÀN TOÀN HÀM NÀY ===
   Widget _buildActionAndHistorySection(BuildContext context, ProductInfoLoadedState scanState, ScanBloc bloc) {
-    // ✅ Logic này giờ đã hoạt động đúng vì các hàm helper đã được sửa
     final userOrgName = _getOrganizationName(context);
     final canUpdate = userOrgName != null && userOrgName == scanState.product.organizationName;
 
+    // ---
+    // GIAI ĐOẠN 1: Mới tải xong Product, CHƯA tải Timeline
+    // (State là ProductInfoLoadedState NHƯNG KHÔNG PHẢI ProductDetailsLoadedState)
+    // ---
     if (scanState is! ProductDetailsLoadedState) {
       return Center(
         child: Column(
@@ -240,10 +245,12 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)
               ),
               icon: const Icon(Icons.history, size: 20),
-              label: const Text("View Transaction History", style: TextStyle(fontWeight: FontWeight.bold)),
+              // Đổi tên nút
+              label: const Text("View Full Timeline", style: TextStyle(fontWeight: FontWeight.bold)),
               onPressed: () => bloc.add(FetchProductHistoryEvent(scanState.product.batchId)),
             ),
             const SizedBox(height: 15),
+            // Logic hiển thị nút "Add Process Step"
             if (canUpdate)
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
@@ -273,22 +280,133 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
       );
     }
 
+    // ---
+    // GIAI ĐOẠN 2: Đã tải xong Timeline (State là ProductDetailsLoadedState)
+    // ---
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Transaction History",
+        const Text("Product Timeline", // Đổi tên tiêu đề
             style: TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 10),
-        if (scanState.history.isEmpty)
-          const Text("No transactions have been recorded yet.",
+
+        // Vẫn hiển thị nút "Add" ở đây nếu có quyền
+        if (canUpdate)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 15.0),
+            child: Center(
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orangeAccent,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)
+                ),
+                icon: const Icon(Icons.add_circle_outline, size: 20),
+                label: const Text("Add Process Step", style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () => _showAddProcessDialog(scanState.product),
+              ),
+            ),
+          ),
+
+        // Đọc từ `scanState.timeline` (danh sách đã gộp)
+        if (scanState.timeline.isEmpty)
+          const Text("No timeline events have been recorded yet.",
               style: TextStyle(color: Colors.white54))
         else
-          ...scanState.history.map((h) => _buildHistoryItemCard(h)).toList(),
+        // Lặp qua danh sách timeline và gọi hàm router
+          ...scanState.timeline.map((item) => _buildTimelineItem(item)).toList(),
       ],
     );
   }
 
+  // === HÀM MỚI: Router để chọn card 🔵 hay 🟠 ===
+  Widget _buildTimelineItem(TimelineItem item) {
+    // Nếu là ProcessEventItem -> Vẽ card cam 🟠
+    if (item is ProcessEventItem) {
+      return _buildProcessItemCard(item.processStep);
+    }
+    // Nếu là HistoryEventItem -> Vẽ card xanh 🔵
+    if (item is HistoryEventItem) {
+      return _buildHistoryItemCard(item.historyEvent);
+    }
+    // Mặc định
+    return const SizedBox.shrink();
+  }
+
+  // === HÀM MỚI: Card viền cam 🟠 cho Process ===
+  Widget _buildProcessItemCard(ProcessStep p) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.orangeAccent.withOpacity(0.5), width: 1.5), // <-- Viền cam
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            p.processName, // Tên quy trình
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.orangeAccent, // <-- Màu cam
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _historyDetailRow('Type', _processTypes[p.processType]), // Lấy tên từ list
+          _historyDetailRow('Organization', p.organizationName),
+          if (p.description.isNotEmpty) // Chỉ hiển thị nếu có
+            _historyDetailRow('Description', p.description),
+          _historyDetailRow(
+              'Time',
+              DateTime.fromMillisecondsSinceEpoch(p.date.toInt() * 1000).toLocal().toString().split('.')[0]
+          ),
+        ],
+      ),
+    );
+  }
+
+  // === HÀM CŨ ĐƯỢC CẬP NHẬT: Card viền xanh 🔵 cho Create/Transfer ===
+  Widget _buildHistoryItemCard(ProductHistory h) {
+    // Kiểm tra xem có phải sự kiện "Created" không
+    final bool isCreateEvent = h.type == HistoryType.create;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.greenAccent.withOpacity(0.5), width: 1.5), // <-- Viền xanh
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            h.note, // "Product Created" hoặc "Transferred"
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.greenAccent, // <-- Màu xanh
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 6),
+          // Chỉ hiển thị 'From' nếu không phải sự kiện Create
+          if (!isCreateEvent)
+            _historyDetailRow('From', h.from, isAddress: true),
+          _historyDetailRow('To', h.to, isAddress: true),
+          _historyDetailRow('Time', h.dateTime.toString().split('.')[0]),
+        ],
+      ),
+    );
+  }
+
+  // (Các hàm build UI còn lại giữ nguyên)
+
   Widget _buildScannerSection(ScanBloc scanBloc) {
+    // (Giữ nguyên)
     return Container(
       padding: const EdgeInsets.only(top: 80),
       height: 300,
@@ -301,7 +419,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
               controller: _controller,
               onDetect: (capture) {
                 if (_isDisposed) return;
-
                 final code = capture.barcodes.first.rawValue;
                 if (code != null &&
                     code.isNotEmpty &&
@@ -352,6 +469,7 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
   }
 
   Widget _buildManualInputSection(ScanBloc scanBloc) {
+    // (Giữ nguyên)
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
       child: Row(
@@ -422,6 +540,7 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
       ScanState scanState,
       ScanBloc bloc,
       ) {
+    // (Giữ nguyên)
     if (scanState is ScanLoadingState ||
         scanState is ProductHistoryLoadingState) {
       return const Center(
@@ -451,8 +570,14 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
       return RefreshIndicator(
         color: Colors.greenAccent,
         backgroundColor: const Color(0xFF243B55),
-        onRefresh: () async =>
-            bloc.add(BarcodeScannedEvent(scanState.product.batchId)),
+        // Cập nhật onRefresh để tải lại cả timeline nếu cần
+        onRefresh: () async {
+          bloc.add(BarcodeScannedEvent(scanState.product.batchId));
+          // Nếu đang ở state chi tiết (đã tải timeline), cũng refresh luôn timeline
+          if (scanState is ProductDetailsLoadedState) {
+            bloc.add(FetchProductHistoryEvent(scanState.product.batchId));
+          }
+        },
         child: ListView(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -482,26 +607,28 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
 
   // === HÀM MỚI: Helper để tạo nhóm thông tin ===
   Widget _buildInfoGroup(String title, List<Widget> children) {
+    // (Giữ nguyên)
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
           style: const TextStyle(
-            color: Colors.greenAccent, // Màu nhấn cho tiêu đề nhóm
+            color: Colors.greenAccent,
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 8),
-        ...children, // Thêm các _infoRow vào đây
-        const SizedBox(height: 16), // Khoảng cách giữa các nhóm
+        ...children,
+        const SizedBox(height: 16),
       ],
     );
   }
 
   // === HÀM ĐƯỢC VIẾT LẠI: Gom nhóm thông tin ===
   Widget _buildProductHeader(BuildContext context, Product product) {
+    // (Giữ nguyên)
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.1),
@@ -515,7 +642,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Tiêu đề chính (Tên sản phẩm)
           Text(
             product.name,
             style: const TextStyle(
@@ -525,8 +651,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
             ),
           ),
           const Divider(color: Colors.white38, height: 25),
-
-          // --- Nhóm 1: Thông tin Truy xuất ---
           _buildInfoGroup(
             "Tracking Information",
             [
@@ -536,8 +660,6 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
               _infoRow('Organization', product.organizationName),
             ],
           ),
-
-          // --- Nhóm 2: Chi tiết Sản phẩm ---
           _buildInfoGroup(
             "Product Details",
             [
@@ -553,6 +675,7 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
 
   // === HÀM NÀY GIỮ NGUYÊN (dùng cho _buildInfoGroup) ===
   Widget _infoRow(String title, String value, {bool isAddress = false}) {
+    // (Giữ nguyên)
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
@@ -607,36 +730,8 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     );
   }
 
-  Widget _buildHistoryItemCard(ProductHistory h) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.15)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            h.note,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.greenAccent,
-              fontSize: 15,
-            ),
-          ),
-          const SizedBox(height: 6),
-          _historyDetailRow('From', h.from),
-          _historyDetailRow('To', h.to),
-          _historyDetailRow('Time', h.dateTime.toString().split('.')[0]),
-        ],
-      ),
-    );
-  }
-
-  Widget _historyDetailRow(String title, String value) {
+  // === THAY ĐỔI: Thêm `isAddress` cho `_historyDetailRow` ===
+  Widget _historyDetailRow(String title, String value, {bool isAddress = false}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -647,7 +742,11 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
         Flexible(
           child: Text(
             value,
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontFamily: isAddress ? "monospace" : null, // Thêm font monospace cho địa chỉ
+            ),
           ),
         ),
       ],
