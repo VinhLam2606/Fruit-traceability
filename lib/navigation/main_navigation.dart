@@ -4,6 +4,7 @@ import 'package:untitled/dashboard/bloc/account_bloc.dart';
 import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
 import 'package:untitled/dashboard/bloc/organization_bloc.dart';
 import 'package:untitled/dashboard/bloc/scan_bloc.dart';
+import 'package:untitled/dashboard/bloc/user_organization_bloc.dart';
 import 'package:untitled/dashboard/ui/account_page.dart';
 // import 'package:untitled/dashboard/ui/home_page.dart'; // Đã xóa import HomePage
 import 'package:untitled/dashboard/ui/organization_management_page.dart';
@@ -75,8 +76,16 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
               ),
               // ScanBloc giờ chỉ cần web3client
               BlocProvider<ScanBloc>(
-                create: (context) =>
-                    ScanBloc(web3client: dashboardBloc.web3client, credentials: dashboardBloc.credentials),
+                create: (context) => ScanBloc(
+                  web3client: dashboardBloc.web3client,
+                  credentials: dashboardBloc.credentials,
+                ),
+              ),
+              BlocProvider<UserOrganizationBloc>(
+                create: (context) => UserOrganizationBloc(
+                  web3client: dashboardBloc.web3client,
+                  credentials: dashboardBloc.credentials,
+                )..add(FetchUserOrganization()),
               ),
             ],
             child: _buildScaffold(),

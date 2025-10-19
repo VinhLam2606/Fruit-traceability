@@ -1,12 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:http/http.dart' as http;
+import 'package:untitled/auth/service/auth_service.dart'; // 🔥 IMPORT AUTHSERVICE
 import 'package:untitled/auth/service/walletExt_service.dart';
-import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
-import 'package:untitled/navigation/main_navigation.dart';
-import 'package:web3dart/web3dart.dart';
+import 'package:web3dart/credentials.dart';
+
+import 'login_or_register_page.dart';
+// 💥 XÓA CÁC IMPORT LIÊN QUAN ĐẾN ĐIỀU HƯỚNG CŨ
+// import 'package:flutter_bloc/flutter_bloc.dart';
+// import 'package:http/http.dart' as http;
+// import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
+// import 'package:untitled/navigation/main_navigation.dart';
+// import 'package:web3dart/web3dart.dart';
 
 class OrganizationFormPage extends StatefulWidget {
   final String ethAddress;
@@ -55,21 +60,21 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
       if (uid == null) throw Exception("No user logged in.");
 
       // 1️⃣ Save organization info to Firestore
-      await FirebaseFirestore.instance
-          .collection("organizations")
-          .doc(uid)
-          .set({
-            "fullName": fullNameController.text.trim(),
-            "brandName": brandController.text.trim(),
-            "businessType": businessTypeController.text.trim(),
-            "foundedYear": foundedYearController.text.trim(),
-            "address": addressController.text.trim(),
-            "phoneNumber": phoneController.text.trim(),
-            "email": emailController.text.trim(),
-            "eth_address": widget.ethAddress,
-            "private_key": widget.privateKey,
-            "createdAt": FieldValue.serverTimestamp(),
-          });
+      await FirebaseFirestore.instance.collection("organizations").doc(uid).set(
+        {
+          "fullName": fullNameController.text.trim(),
+          "brandName": brandController.text.trim(),
+          "businessType": businessTypeController.text.trim(),
+          "foundedYear": foundedYearController.text.trim(),
+          "address": addressController.text.trim(),
+          "phoneNumber": phoneController.text.trim(),
+          "email": emailController.text.trim(),
+          "eth_address": widget.ethAddress
+              .toLowerCase(), // 💡 Luôn lưu lowercase
+          "private_key": widget.privateKey,
+          "createdAt": FieldValue.serverTimestamp(),
+        },
+      );
 
       // 2️⃣ Retrieve user’s private key from Firestore
       final userDoc = await FirebaseFirestore.instance
@@ -82,7 +87,7 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
       }
 
       // 3️⃣ Init blockchain client
-      await initContract();
+      await initContract(); // Giả sử hàm này tồn tại từ file gốc của bạn
       final credentials = EthPrivateKey.fromHex(privateKey);
       final walletAddress = await credentials.extractAddress();
 
@@ -100,48 +105,60 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
         print("🟡 Already has an organization on-chain, skipping creation.");
       } else {
         // 5️⃣ Register organization on-chain
+        // 💡 Sửa lỗi: Lấy tên từ brandController (hoặc fullName) thay vì username
         final txHash = await addOrganizationOnChain(
-          fullNameController.text.trim(),
+          brandController.text.trim(), // Hoặc fullNameController.text.trim()
           credentials,
         );
-        await waitForTxConfirmation(txHash);
-        print("✅ Organization registered on blockchain: $txHash");
+
+        // 🔥🔥 SỬA LỖI: XÓA DÒNG NÀY ĐỂ TRÁNH BỊ TREO VĨNH VIỄN
+        // await waitForTxConfirmation(txHash);
+
+        print("✅ Giao dịch đăng ký tổ chức ĐÃ GỬI: $txHash");
       }
 
-      // 6️⃣ Success feedback
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("✅ Organization saved successfully!"),
-          backgroundColor: Colors.green,
-        ),
-      );
+      // 🔥 BƯỚC 4: Cập nhật cờ 'isOrganizationDetailsSubmitted'
+      final newUsername = fullNameController.text.trim();
+      await FirebaseFirestore.instance.collection("users").doc(uid).update({
+        "isOrganizationDetailsSubmitted": true,
+        "username": newUsername, // Cập nhật tên user bằng tên đầy đủ
+      });
 
-      // 7️⃣ Navigate directly into dashboard (same as post-login)
-      final rpcUrl = "http://10.0.2.2:7545";
-      final web3client = Web3Client(rpcUrl, http.Client());
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (_) => BlocProvider(
-            create: (_) =>
-                DashboardBloc(web3client: web3client, credentials: credentials)
-                  ..add(DashboardInitialFetchEvent()),
-            child: const MainNavigationPage(),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "✅ Đăng ký tổ chức thành công! Vui lòng đăng nhập lại.",
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2), // Cho user kịp đọc
           ),
-        ),
-        (route) => false, // clear navigation stack
-      );
+        );
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+
+      await authService.value.signOut();
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginOrRegisterPage()),
+          (route) => false,
+        );
+      }
     } catch (e) {
       print("❌ Failed to save organization: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("❌ Failed to save organization: $e"),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("❌ Failed to save organization: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+
+        // 🔥🔥 SỬA LỖI: Chỉ setState(false) khi có lỗi
+        setState(() => _isSaving = false);
+      }
     } finally {
-      setState(() => _isSaving = false);
+      // 🔥🔥 SỬA LỖI: Đảm bảo khối finally rỗng
     }
   }
 

@@ -13,8 +13,6 @@ import 'package:untitled/auth/service/walletExt_service.dart';
 import 'package:web3dart/crypto.dart' as crypto;
 import 'package:web3dart/web3dart.dart';
 
-import 'organization_form_page.dart';
-
 class RegisterPage extends StatefulWidget {
   final Function()? onTap;
   const RegisterPage({super.key, this.onTap});
@@ -89,7 +87,7 @@ class _RegisterPageState extends State<RegisterPage> {
   // 🧩 Lấy tài khoản Ganache chưa dùng
   Future<void> initGanacheAccount() async {
     const mnemonic =
-        "decorate foil consider depart section genuine plate person change file catch animal";
+        "pony cheese victory dismiss prize chair believe swing indicate wrong drip avoid";
 
     try {
       final ganacheAccounts = await getGanacheAccounts();
@@ -110,7 +108,7 @@ class _RegisterPageState extends State<RegisterPage> {
         final key = EthPrivateKey.fromHex(privateKey);
         final address = await key.extractAddress();
 
-        if (usedAddresses.contains(address.hex)) continue;
+        if (usedAddresses.contains(address.hex.toLowerCase())) continue;
 
         final balance = await ethClient.getBalance(address);
         if (balance.getInEther == BigInt.zero) continue;
@@ -141,7 +139,7 @@ class _RegisterPageState extends State<RegisterPage> {
       if (data.containsKey("eth_address")) {
         final addr = data["eth_address"];
         if (addr is String && addr.isNotEmpty) {
-          addresses.add(addr);
+          addresses.add(addr.toLowerCase());
         }
       }
     }
@@ -275,6 +273,11 @@ class _RegisterPageState extends State<RegisterPage> {
 
       final credentials = EthPrivateKey.fromHex(providedPrivateKey);
       final walletAddress = EthereumAddress.fromHex(providedAddress);
+      final pKeyHex = crypto.bytesToHex(
+        credentials.privateKey,
+        include0x: true,
+      );
+      final ethAddressHex = walletAddress.hex.toLowerCase();
 
       final regTx = await _registerOnBlockchain(
         username,
@@ -285,45 +288,48 @@ class _RegisterPageState extends State<RegisterPage> {
       await _waitForTx(regTx);
 
       String roleToSave = "Customer";
+      bool orgDetailsSubmitted = true; // Mặc định là true cho 'user'
 
       if (accountType == "organization") {
         final orgTx = await _addOrganization("${username}_org", credentials);
         await _waitForTx(orgTx);
         print("🏢 Created organization for $username (role=Manufacturer)");
         roleToSave = "Manufacturer";
+        orgDetailsSubmitted = false; // 🔥 ĐẶT LÀ FALSE KHI TẠO ORG
       }
 
+      // 🔥 TẠO MAP DỮ LIỆU
+      final Map<String, dynamic> userData = {
+        "username": username,
+        "email": email,
+        "role": roleToSave,
+        "accountType": accountType,
+        "eth_address": ethAddressHex,
+        "private_key": pKeyHex,
+        "createdAt": FieldValue.serverTimestamp(),
+        "isOrganizationDetailsSubmitted": orgDetailsSubmitted,
+      };
+
+      // 🔥 Ghi vào Firestore
       await FirebaseFirestore.instance
           .collection("users")
           .doc(firebaseUser.user!.uid)
-          .set({
-            "username": username,
-            "email": email,
-            "role": roleToSave,
-            "accountType": accountType,
-            "eth_address": walletAddress.hex,
-            "private_key": crypto.bytesToHex(
-              credentials.privateKey,
-              include0x: true,
-            ),
-            "createdAt": FieldValue.serverTimestamp(),
-          });
+          .set(userData);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("✅ Đăng ký $roleToSave thành công!")),
       );
 
-      if (accountType == "organization") {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => OrganizationFormPage(
-              ethAddress: providedAddress,
-              privateKey: providedPrivateKey,
-            ),
-          ),
-        );
-      }
+      // 🔥🔥 SỬA LỖI: CẬP NHẬT AUTHSERVICE NGAY LẬP TỨC 🔥🔥
+      // Điều này sẽ kích hoạt AuthLayout rebuild với dữ liệu MỚI NHẤT
+      authService.value.userData = {
+        "username": username,
+        "accountType": accountType,
+        "eth_address": ethAddressHex,
+        "private_key": pKeyHex,
+        "isOrganizationDetailsSubmitted": orgDetailsSubmitted,
+      };
+      authService.notifyListeners();
     } catch (e) {
       print("❌ Lỗi đăng ký: $e");
       ScaffoldMessenger.of(

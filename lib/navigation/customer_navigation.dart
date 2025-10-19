@@ -5,17 +5,21 @@ import 'package:untitled/dashboard/bloc/account_bloc.dart';
 import 'package:untitled/dashboard/ui/account_page.dart';
 import 'package:web3dart/web3dart.dart';
 
+import '../dashboard/bloc/scan_bloc.dart';
+import '../dashboard/bloc/user_organization_bloc.dart';
 import '../dashboard/ui/scan_barcode_page.dart';
 import '../dashboard/ui/user_organization_page.dart';
 
 class CustomerNavigationPage extends StatefulWidget {
   final Web3Client web3client;
   final DeployedContract deployedContract;
+  final EthPrivateKey credentials;
 
   const CustomerNavigationPage({
     super.key,
     required this.web3client,
     required this.deployedContract,
+    required this.credentials,
   });
 
   @override
@@ -33,11 +37,28 @@ class _CustomerNavigationPageState extends State<CustomerNavigationPage> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => AccountBloc(
-        web3client: widget.web3client,
-        deployedContract: widget.deployedContract,
-      )..add(FetchAccountDetails()),
+    // 💡 CHUYỂN SANG DÙNG MULTIBLOCPROVIDER
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<AccountBloc>(
+          create: (context) => AccountBloc(
+            web3client: widget.web3client,
+            deployedContract: widget.deployedContract,
+          )..add(FetchAccountDetails()),
+        ),
+        BlocProvider<ScanBloc>(
+          create: (context) => ScanBloc(
+            web3client: widget.web3client,
+            credentials: widget.credentials, // 💡 SỬ DỤNG CREDENTIALS
+          ),
+        ),
+        BlocProvider<UserOrganizationBloc>(
+          create: (context) => UserOrganizationBloc(
+            web3client: widget.web3client,
+            credentials: widget.credentials, // 💡 SỬ DỤNG CREDENTIALS
+          )..add(FetchUserOrganization()),
+        ),
+      ],
       child: _buildScaffold(),
     );
   }
