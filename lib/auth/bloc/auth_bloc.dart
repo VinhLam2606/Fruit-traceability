@@ -34,9 +34,34 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthLogoutRequested>(_onLogoutRequested);
   }
 
-  // ------------------------------------------------------------
-  // 🔹 BASIC EVENTS
-  // ------------------------------------------------------------
+  Future<void> _initGanacheAccount() async {
+    const mnemonic =
+        "empower ocean injury exchange diesel hub veteran athlete cake resist hurdle response";
+
+    final ganacheAccounts = await _getGanacheAccounts();
+    if (ganacheAccounts.isEmpty) {
+      throw Exception("Ganache RPC returned no accounts.");
+    }
+
+    for (int i = 0; i < 10; i++) {
+      final derivedKey = _derivePrivateKeyFromMnemonic(mnemonic, i);
+      final credentials = EthPrivateKey.fromHex(derivedKey);
+      final address = await credentials.extractAddress();
+
+      final balance = await ethClient.getBalance(address);
+      if (balance.getInEther == BigInt.zero) continue;
+
+      final alreadyRegistered = await _isUserAlreadyRegistered(address);
+      if (!alreadyRegistered) {
+        providedPrivateKey = derivedKey;
+        providedAddress = address.hex;
+        print("🟢 Selected funded account #$i: $providedAddress");
+        return;
+      }
+    }
+    throw Exception("No funded & unregistered Ganache accounts available!");
+  }
+
   Future<void> _onAuthStarted(
     AuthStarted event,
     Emitter<AuthState> emit,
@@ -50,7 +75,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(AuthLoading());
     try {
+      print("🔑 [AuthBloc] Logging in user with email: ${event.email}");
       await _authService.signIn(email: event.email, password: event.password);
+
+      print("✅ [AuthBloc] Login successful for: ${_authService.username}");
+      print("🪪 Wallet: ${_authService.walletAddress}");
+      print("👤 Account Type: ${_authService.accountType}");
+
       emit(
         AuthSuccess(
           username: _authService.username ?? '',
@@ -58,7 +89,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           accountType: _authService.accountType ?? '',
         ),
       );
+
+      print("✨ [AuthBloc] Welcome back, ${_authService.username ?? 'User'}!");
     } catch (e) {
+      print("❌ [AuthBloc] Login failed: $e");
       emit(AuthFailure(e.toString()));
     }
   }
@@ -176,34 +210,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     } catch (e) {
       print("⚠️ Failed to load contract: $e");
     }
-  }
-
-  Future<void> _initGanacheAccount() async {
-    const mnemonic =
-        "syrup orange good either panic despair media dumb weather creek truck corn";
-
-    final ganacheAccounts = await _getGanacheAccounts();
-    if (ganacheAccounts.isEmpty) {
-      throw Exception("Ganache RPC returned no accounts.");
-    }
-
-    for (int i = 0; i < 10; i++) {
-      final derivedKey = _derivePrivateKeyFromMnemonic(mnemonic, i);
-      final credentials = EthPrivateKey.fromHex(derivedKey);
-      final address = await credentials.extractAddress();
-
-      final balance = await ethClient.getBalance(address);
-      if (balance.getInEther == BigInt.zero) continue;
-
-      final alreadyRegistered = await _isUserAlreadyRegistered(address);
-      if (!alreadyRegistered) {
-        providedPrivateKey = derivedKey;
-        providedAddress = address.hex;
-        print("🟢 Selected funded account #$i: $providedAddress");
-        return;
-      }
-    }
-    throw Exception("No funded & unregistered Ganache accounts available!");
   }
 
   Future<List<String>> _getGanacheAccounts() async {

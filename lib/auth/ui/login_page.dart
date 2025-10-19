@@ -2,9 +2,13 @@
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:untitled/auth/service/auth_service.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:untitled/auth/auth_layout.dart';
+import 'package:untitled/auth/bloc/auth_bloc.dart';
+import 'package:untitled/auth/bloc/auth_event.dart';
+import 'package:untitled/auth/bloc/auth_state.dart';
 
-import '../auth_layout.dart'; // 🔥 import để điều hướng về AuthLayout
+// 🔥 import để điều hướng về AuthLayout
 
 class LoginPage extends StatefulWidget {
   final Function()? onTap;
@@ -20,45 +24,12 @@ class _LoginPageState extends State<LoginPage> {
   final passwordController = TextEditingController();
 
   String errorMessage = '';
-  bool _isLoading = false;
 
   @override
   void dispose() {
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
-  }
-
-  Future<void> login() async {
-    if (!_formKey.currentState!.validate() || _isLoading) return;
-    setState(() => _isLoading = true);
-
-    try {
-      final userCred = await authService.value.signIn(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-      );
-
-      print("➡ Login success for: ${userCred.user!.email}");
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("✅ Welcome back!")));
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const AuthLayout()),
-        (route) => false,
-      );
-    } catch (e) {
-      setState(() => errorMessage = e.toString());
-      print("⚠️ Login error: $e");
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("❌ Login failed: $errorMessage")));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
   }
 
   @override
@@ -132,35 +103,74 @@ class _LoginPageState extends State<LoginPage> {
                     // Login button
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.greenAccent,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          elevation: 10,
-                          shadowColor: Colors.greenAccent.withOpacity(0.5),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 22,
-                                width: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.black,
-                                ),
-                              )
-                            : const Text(
-                                "LOGIN",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.2,
+                      child: BlocConsumer<AuthBloc, AuthState>(
+                        listener: (context, state) {
+                          if (state is AuthSuccess) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("✅ Welcome back!")),
+                            );
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const AuthLayout(),
+                              ),
+                              (route) => false,
+                            );
+                          } else if (state is AuthFailure) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  "❌ Login failed: ${state.message}",
                                 ),
                               ),
+                            );
+                          }
+                        },
+                        builder: (context, state) {
+                          final isLoading = state is AuthLoading;
+
+                          return ElevatedButton(
+                            onPressed: isLoading
+                                ? null
+                                : () {
+                                    if (_formKey.currentState!.validate()) {
+                                      context.read<AuthBloc>().add(
+                                        AuthLoginRequested(
+                                          emailController.text.trim(),
+                                          passwordController.text.trim(),
+                                        ),
+                                      );
+                                    }
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.greenAccent,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                              elevation: 10,
+                              shadowColor: Colors.greenAccent.withOpacity(0.5),
+                            ),
+                            child: isLoading
+                                ? const SizedBox(
+                                    height: 22,
+                                    width: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.black,
+                                    ),
+                                  )
+                                : const Text(
+                                    "LOGIN",
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.2,
+                                    ),
+                                  ),
+                          );
+                        },
                       ),
                     ),
 
