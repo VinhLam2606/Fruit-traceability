@@ -127,20 +127,24 @@ class AuthService extends ChangeNotifier {
     String? accountType,
     String? username,
   }) async {
-    if (privateKey != null)
+    if (privateKey != null) {
       await _secureStorage.write(key: _privateKeyStorageKey, value: privateKey);
-    if (walletAddress != null)
+    }
+    if (walletAddress != null) {
       await _secureStorage.write(
         key: _walletAddressStorageKey,
         value: walletAddress,
       );
-    if (accountType != null)
+    }
+    if (accountType != null) {
       await _secureStorage.write(
         key: _accountTypeStorageKey,
         value: accountType,
       );
-    if (username != null)
+    }
+    if (username != null) {
       await _secureStorage.write(key: _usernameStorageKey, value: username);
+    }
   }
 
   // =======================================================================
