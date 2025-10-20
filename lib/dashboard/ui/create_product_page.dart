@@ -78,6 +78,7 @@ class _CreateProductViewState extends State<CreateProductView> {
           colors: _backgroundGradient,
         ),
       ),
+      // ✅ Khôi phục lại BlocConsumer đơn giản chỉ cho DashboardBloc
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
@@ -108,8 +109,8 @@ class _CreateProductViewState extends State<CreateProductView> {
           builder: (context, state) {
             final isLoading =
                 _isProcessing ||
-                (state is DashboardLoadingState &&
-                    state is! ProductsLoadedState);
+                    (state is DashboardLoadingState &&
+                        state is! ProductsLoadedState);
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -204,9 +205,9 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 
   Future<void> _createProductsSequentially(
-    BuildContext context,
-    bool generatePdf,
-  ) async {
+      BuildContext context,
+      bool generatePdf,
+      ) async {
     final int quantity = int.tryParse(quantityController.text) ?? 1;
     final int currentTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final String baseName = nameController.text.trim();
@@ -386,6 +387,7 @@ class _CreateProductViewState extends State<CreateProductView> {
     );
   }
 
+  // ✅ Khôi phục lại hàm show dialog đơn giản
   void _showProductDetailsDialog(BuildContext context, Product product) {
     showDialog(
       context: context,
@@ -396,10 +398,10 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 
   Widget _buildProductList(
-    BuildContext context,
-    DashboardState state,
-    bool isLoading,
-  ) {
+      BuildContext context,
+      DashboardState state,
+      bool isLoading,
+      ) {
     final products = state is ProductsLoadedState
         ? state.products.reversed.toList()
         : <Product>[];
@@ -424,8 +426,8 @@ class _CreateProductViewState extends State<CreateProductView> {
                 onPressed: isLoading
                     ? null
                     : () {
-                        context.read<DashboardBloc>().add(FetchProductsEvent());
-                      },
+                  context.read<DashboardBloc>().add(FetchProductsEvent());
+                },
               ),
             ],
           ),
@@ -481,12 +483,12 @@ class _CreateProductViewState extends State<CreateProductView> {
                           "Batch ID: ${product.batchId}",
                           style: const TextStyle(color: Colors.white70),
                         ),
-                        // --- THAY ĐỔI: Thêm nút info ---
                         trailing: IconButton(
                           icon: const Icon(
                             Icons.info_outline,
                             color: Colors.white70,
                           ),
+                          // ✅ Khôi phục lại onPressed đơn giản
                           onPressed: () =>
                               _showProductDetailsDialog(context, product),
                         ),
@@ -502,7 +504,9 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 }
 
-// --- WIDGET MỚI: Dialog hiển thị chi tiết sản phẩm ---
+// ===================================================================
+// === ⛔️ CẬP NHẬT: Đã xóa phần Process History khỏi Dialog này ===
+// ===================================================================
 class ProductDetailsDialog extends StatelessWidget {
   final Product product;
 
@@ -557,8 +561,7 @@ class ProductDetailsDialog extends StatelessWidget {
                 isAddress: true,
               ),
               _buildDetailRow("Organization:", product.organizationName),
-              const SizedBox(height: 20),
-              _buildProcessSteps(),
+              // ⛔️ Đã xóa _buildProcessSteps() và SizedBox
             ],
           ),
         ),
@@ -566,6 +569,7 @@ class ProductDetailsDialog extends StatelessWidget {
     );
   }
 
+  // ✅ Khôi phục lại _buildDetailRow gốc (kiểu dáng đơn giản)
   Widget _buildDetailRow(String title, String value, {bool isAddress = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -587,76 +591,11 @@ class ProductDetailsDialog extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildProcessSteps() {
-    if (product.processSteps.isEmpty) {
-      return const Center(
-        child: Text(
-          "No process history available.",
-          style: TextStyle(color: Colors.white54, fontStyle: FontStyle.italic),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "Process History",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        ...product.processSteps.map((step) => _buildProcessStepCard(step)),
-      ],
-    );
-  }
-
-  Widget _buildProcessStepCard(ProcessStep step) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            step.processName,
-            style: const TextStyle(
-              color: Colors.greenAccent,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(step.description, style: const TextStyle(color: Colors.white70)),
-          const Divider(color: Colors.white12, height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                step.organizationName,
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-              Text(
-                _formatTimestamp(step.date),
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+// ⛔️ Đã xóa _buildProcessSteps()
+// ⛔️ Đã xóa _buildProcessStepCard()
 }
 
+// (CustomLoadingDialog giữ nguyên)
 class CustomLoadingDialog extends StatelessWidget {
   const CustomLoadingDialog({super.key});
 
