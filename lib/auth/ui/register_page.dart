@@ -8,6 +8,7 @@ import 'package:untitled/auth/bloc/auth_bloc.dart';
 import 'package:untitled/auth/bloc/auth_event.dart';
 import 'package:untitled/auth/bloc/auth_state.dart';
 import 'package:web3dart/web3dart.dart';
+import 'organization_form_page.dart';
 
 class RegisterPage extends StatefulWidget {
   final Function()? onTap;
@@ -154,21 +155,42 @@ class _RegisterPageState extends State<RegisterPage> {
                       width: double.infinity,
                       child: BlocConsumer<AuthBloc, AuthState>(
                         listener: (context, state) {
-                          if (state is AuthSuccess || state is AuthLoggedOut) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("✅ Registration successful!"),
-                              ),
-                            );
+                          if (state is AuthSuccess) {
+                            // 🔹 Nếu là organization → vào OrganizationFormPage
+                            if (state.accountType == "organization") {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    "🏢 Please complete your organization info",
+                                  ),
+                                ),
+                              );
 
-                            // Điều hướng đến AuthLayout
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const AuthLayout(),
-                              ),
-                              (route) => false,
-                            );
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => OrganizationFormPage(
+                                    ethAddress: AuthBloc.providedAddress,
+                                    privateKey: AuthBloc.providedPrivateKey,
+                                  ),
+                                ),
+                                (route) => false,
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("✅ Registration successful!"),
+                                ),
+                              );
+
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const AuthLayout(),
+                                ),
+                                (route) => false,
+                              );
+                            }
                           } else if (state is AuthFailure) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
@@ -179,6 +201,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             );
                           }
                         },
+
                         builder: (context, state) {
                           final isLoading = state is AuthLoading;
 

@@ -176,7 +176,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           });
 
       print("🎉 Registration completed successfully!");
-      emit(AuthLoggedOut());
+      emit(
+        AuthSuccess(
+          username: event.username,
+          walletAddress: providedAddress,
+          accountType: event.accountType,
+        ),
+      );
     } catch (e) {
       print("❌ Registration failed: $e");
       emit(AuthFailure(e.toString()));
