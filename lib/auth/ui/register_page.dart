@@ -1,12 +1,21 @@
-// ignore_for_file: unused_field
+import 'dart:convert';
+import 'dart:math';
 
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hd_wallet_kit/hd_wallet_kit.dart';
+import 'package:http/http.dart' as http;
 import 'package:untitled/auth/auth_layout.dart';
 import 'package:untitled/auth/bloc/auth_bloc.dart';
-import 'package:untitled/auth/bloc/auth_event.dart';
-import 'package:untitled/auth/bloc/auth_state.dart';
+import 'package:untitled/auth/bloc/auth_state.dart'
+    show AuthState, AuthSuccess, AuthLoggedOut, AuthFailure, AuthLoading;
+import 'package:untitled/auth/service/auth_service.dart';
+import 'package:untitled/auth/service/walletExt_service.dart';
+import 'package:web3dart/crypto.dart' as crypto;
 import 'package:web3dart/web3dart.dart';
 import 'organization_form_page.dart';
 
@@ -30,9 +39,6 @@ class _RegisterPageState extends State<RegisterPage> {
 
   late Web3Client ethClient;
   DeployedContract? usersContract;
-
-  static String providedPrivateKey = "";
-  static String providedAddress = "";
 
   // ---------------- UI ------------------
 
@@ -155,42 +161,21 @@ class _RegisterPageState extends State<RegisterPage> {
                       width: double.infinity,
                       child: BlocConsumer<AuthBloc, AuthState>(
                         listener: (context, state) {
-                          if (state is AuthSuccess) {
-                            // 🔹 Nếu là organization → vào OrganizationFormPage
-                            if (state.accountType == "organization") {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    "🏢 Please complete your organization info",
-                                  ),
-                                ),
-                              );
+                          if (state is AuthSuccess || state is AuthLoggedOut) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("✅ Registration successful!"),
+                              ),
+                            );
 
-                              Navigator.pushAndRemoveUntil(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => OrganizationFormPage(
-                                    ethAddress: AuthBloc.providedAddress,
-                                    privateKey: AuthBloc.providedPrivateKey,
-                                  ),
-                                ),
-                                (route) => false,
-                              );
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("✅ Registration successful!"),
-                                ),
-                              );
-
-                              Navigator.pushAndRemoveUntil(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const AuthLayout(),
-                                ),
-                                (route) => false,
-                              );
-                            }
+                            // Điều hướng đến AuthLayout
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const AuthLayout(),
+                              ),
+                              (route) => false,
+                            );
                           } else if (state is AuthFailure) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
@@ -201,27 +186,11 @@ class _RegisterPageState extends State<RegisterPage> {
                             );
                           }
                         },
-
                         builder: (context, state) {
                           final isLoading = state is AuthLoading;
 
                           return ElevatedButton(
-                            onPressed: isLoading
-                                ? null
-                                : () {
-                                    if (_formKey.currentState!.validate()) {
-                                      context.read<AuthBloc>().add(
-                                        AuthRegisterRequested(
-                                          email: emailController.text.trim(),
-                                          password: passwordController.text
-                                              .trim(),
-                                          username: usernameController.text
-                                              .trim(),
-                                          accountType: accountType,
-                                        ),
-                                      );
-                                    }
-                                  },
+                            onPressed: null,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.greenAccent,
                               foregroundColor: Colors.black,
@@ -232,21 +201,12 @@ class _RegisterPageState extends State<RegisterPage> {
                               elevation: 10,
                               shadowColor: Colors.greenAccent.withOpacity(0.5),
                             ),
-                            child: isLoading
-                                ? const SizedBox(
+                            child: const SizedBox(
                                     height: 22,
                                     width: 22,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
                                       color: Colors.black,
-                                    ),
-                                  )
-                                : const Text(
-                                    "REGISTER",
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.2,
                                     ),
                                   ),
                           );

@@ -123,10 +123,10 @@ class ProductManagementPage extends StatelessWidget {
   }
 
   Future<void> _saveBarcodePNG(
-    BuildContext context,
-    GlobalKey repaintKey,
-    String batchId,
-  ) async {
+      BuildContext context,
+      GlobalKey repaintKey,
+      String batchId,
+      ) async {
     try {
       if (Platform.isAndroid) {
         final permissions = await [
@@ -146,8 +146,8 @@ class ProductManagementPage extends StatelessWidget {
       }
 
       final boundary =
-          repaintKey.currentContext!.findRenderObject()
-              as RenderRepaintBoundary;
+      repaintKey.currentContext!.findRenderObject()
+      as RenderRepaintBoundary;
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       final pngBytes = byteData!.buffer.asUint8List();
@@ -209,18 +209,14 @@ class ProductManagementPage extends StatelessWidget {
     );
   }
 
-  // ====================== 💡 HÀM MỚI ĐƯỢC THÊM ======================
-  // (Copy từ create_product_page.dart)
   void _showProductDetailsDialog(BuildContext context, Product product) {
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
-        // Sử dụng ProductDetailsDialog (sẽ được copy ở bên dưới)
         return ProductDetailsDialog(product: product);
       },
     );
   }
-  // ===============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -319,150 +315,148 @@ class ProductManagementPage extends StatelessWidget {
                 Expanded(
                   child: products.isEmpty
                       ? const Center(
-                          child: Text(
-                            "No products found.",
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                        )
+                    child: Text(
+                      "No products found.",
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  )
                       : ListView.builder(
-                          itemCount: products.length,
-                          itemBuilder: (context, index) {
-                            final Product product = products[index];
-                            final barcodeKey = GlobalKey();
+                    itemCount: products.length,
+                    itemBuilder: (context, index) {
+                      final Product product = products[index];
+                      final barcodeKey = GlobalKey();
 
-                            return Container(
-                              margin: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
+                      return Container(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _cardColor,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              CircleAvatar(
+                                backgroundColor: _accentColor.withOpacity(
+                                  0.3,
+                                ),
+                                child: const Icon(
+                                  Icons.inventory_2,
+                                  color: _accentColor,
+                                ),
                               ),
-                              decoration: BoxDecoration(
-                                color: _cardColor,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.white12),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                  CrossAxisAlignment.start,
                                   children: [
-                                    CircleAvatar(
-                                      backgroundColor: _accentColor.withOpacity(
-                                        0.3,
-                                      ),
-                                      child: const Icon(
-                                        Icons.inventory_2,
-                                        color: _accentColor,
+                                    Text(
+                                      product.name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        fontSize: 16,
                                       ),
                                     ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            product.name,
+                                    Text(
+                                      "Batch ID: ${product.batchId}",
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    Text(
+                                      "Date Created: ${_formatTimestamp(product.date)}",
+                                      style: const TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Center(
+                                      child: RepaintBoundary(
+                                        key: barcodeKey,
+                                        child: Container(
+                                          width: 250,
+                                          height: 70,
+                                          color: Colors.white,
+                                          padding: const EdgeInsets.all(
+                                            4,
+                                          ),
+                                          child: BarcodeWidget(
+                                            barcode: Barcode.code128(),
+                                            data: product.batchId,
+                                            drawText: true,
                                             style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.white,
                                               fontSize: 16,
+                                              color: Colors.black,
                                             ),
+                                            color: Colors.black,
                                           ),
-                                          Text(
-                                            "Batch ID: ${product.batchId}",
-                                            style: const TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                          Text(
-                                            "Date Created: ${_formatTimestamp(product.date)}",
-                                            style: const TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          Center(
-                                            child: RepaintBoundary(
-                                              key: barcodeKey,
-                                              child: Container(
-                                                width: 250,
-                                                height: 70,
-                                                color: Colors.white,
-                                                padding: const EdgeInsets.all(
-                                                  4,
-                                                ),
-                                                child: BarcodeWidget(
-                                                  barcode: Barcode.code128(),
-                                                  data: product.batchId,
-                                                  drawText: true,
-                                                  style: const TextStyle(
-                                                    fontSize: 16,
-                                                    color: Colors.black,
-                                                  ),
-                                                  color: Colors.black,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          Center(
-                                            child: IconButton(
-                                              icon: const Icon(
-                                                Icons.download_rounded,
-                                                color: _accentColor,
-                                              ),
-                                              tooltip: "Download Barcode",
-                                              onPressed: () => _saveBarcodePNG(
-                                                context,
-                                                barcodeKey,
-                                                product.batchId,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                                        ),
                                       ),
                                     ),
-                                    Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.send,
-                                            color: _accentColor,
-                                            size: 26,
-                                          ),
-                                          tooltip: 'Transfer Product',
-                                          onPressed: () =>
-                                              _showTransferProductModal(
-                                                context,
-                                                product,
-                                              ),
+                                    Center(
+                                      child: IconButton(
+                                        icon: const Icon(
+                                          Icons.download_rounded,
+                                          color: _accentColor,
                                         ),
-                                        const SizedBox(height: 10),
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.info_outline,
-                                            size: 26,
-                                            color: Colors.white70,
-                                          ),
-                                          tooltip: 'View Details',
-                                          // ================= 💡 THAY ĐỔI TẠI ĐÂY =================
-                                          onPressed: () =>
-                                              _showProductDetailsDialog(
-                                                context,
-                                                product,
-                                              ),
-                                          // =======================================================
+                                        tooltip: "Download Barcode",
+                                        onPressed: () => _saveBarcodePNG(
+                                          context,
+                                          barcodeKey,
+                                          product.batchId,
                                         ),
-                                      ],
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
-                            );
-                          },
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.send,
+                                      color: _accentColor,
+                                      size: 26,
+                                    ),
+                                    tooltip: 'Transfer Product',
+                                    onPressed: () =>
+                                        _showTransferProductModal(
+                                          context,
+                                          product,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.info_outline,
+                                      size: 26,
+                                      color: Colors.white70,
+                                    ),
+                                    tooltip: 'View Details',
+                                    onPressed: () =>
+                                        _showProductDetailsDialog(
+                                          context,
+                                          product,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
+                      );
+                    },
+                  ),
                 ),
               ],
             );
@@ -472,9 +466,6 @@ class ProductManagementPage extends StatelessWidget {
     );
   }
 }
-
-// ====================== 💡 WIDGET MỚI ĐƯỢC THÊM ======================
-// (Copy toàn bộ class này từ create_product_page.dart)
 
 class ProductDetailsDialog extends StatelessWidget {
   final Product product;
@@ -530,8 +521,6 @@ class ProductDetailsDialog extends StatelessWidget {
                 isAddress: true,
               ),
               _buildDetailRow("Organization:", product.organizationName),
-              const SizedBox(height: 20),
-              _buildProcessSteps(),
             ],
           ),
         ),
@@ -560,76 +549,4 @@ class ProductDetailsDialog extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildProcessSteps() {
-    // Nhớ rằng product.processSteps sẽ rỗng (do ta sửa ở product.dart)
-    // Phần này sẽ được làm ở bước sau (khi tải chi tiết)
-    if (product.processSteps.isEmpty) {
-      return const Center(
-        child: Text(
-          "No process history available.",
-          style: TextStyle(color: Colors.white54, fontStyle: FontStyle.italic),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "Process History",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        ...product.processSteps.map((step) => _buildProcessStepCard(step)),
-      ],
-    );
-  }
-
-  Widget _buildProcessStepCard(ProcessStep step) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            step.processName,
-            style: const TextStyle(
-              color: Colors.greenAccent,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(step.description, style: const TextStyle(color: Colors.white70)),
-          const Divider(color: Colors.white12, height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                step.organizationName,
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-              Text(
-                _formatTimestamp(step.date),
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 }
-
-// ==================================================================

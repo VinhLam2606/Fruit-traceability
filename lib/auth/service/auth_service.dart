@@ -1,5 +1,3 @@
-// lib/auth/service/auth_service.dart
-
 import 'dart:developer' as developer; // Import developer log
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -24,6 +22,8 @@ class AuthService extends ChangeNotifier {
   String? walletAddress;
   String? accountType;
   String? username;
+  // 🔥 THÊM CỜ MỚI
+  bool? isOrganizationDetailsSubmitted;
 
   // KEY CONSTANTS FOR SECURE STORAGE
   static const _privateKeyStorageKey = 'privateKey';
@@ -31,6 +31,7 @@ class AuthService extends ChangeNotifier {
   // 🔥 THÊM KEYS MỚI
   static const _accountTypeStorageKey = 'accountType';
   static const _usernameStorageKey = 'username';
+  static const _orgDetailsSubmittedKey = 'isOrganizationDetailsSubmitted';
 
   AuthService() {
     authStateChanges.listen(_onAuthStateChanged);
@@ -46,6 +47,7 @@ class AuthService extends ChangeNotifier {
       walletAddress = null;
       accountType = null;
       username = null;
+      isOrganizationDetailsSubmitted = null; // 🔥 Xóa cờ
       await _secureStorage.deleteAll();
       developer.log(
         "🔒 [AuthState] Đã đăng xuất → Xóa key khỏi bộ nhớ an toàn.",
@@ -59,7 +61,9 @@ class AuthService extends ChangeNotifier {
       if (decryptedPrivateKey == null ||
           walletAddress == null ||
           accountType == null ||
-          username == null) {
+          username == null ||
+          (accountType == 'organization' &&
+              isOrganizationDetailsSubmitted == null)) {
         developer.log(
           "⚠️ [AuthState] Dữ liệu trong storage chưa đủ, đang lấy từ Firestore...",
         );
@@ -72,6 +76,9 @@ class AuthService extends ChangeNotifier {
             walletAddress = data['eth_address'];
             accountType = data['accountType'];
             username = data['username'];
+            // 🔥 Lấy cờ từ firestore
+            isOrganizationDetailsSubmitted =
+                data['isOrganizationDetailsSubmitted'];
 
             // Lưu lại toàn bộ dữ liệu vào SecureStorage
             await _saveAllDataToSecureStorage(
@@ -79,9 +86,15 @@ class AuthService extends ChangeNotifier {
               walletAddress: walletAddress,
               accountType: accountType,
               username: username,
+              isOrganizationDetailsSubmitted: isOrganizationDetailsSubmitted,
             );
             developer.log(
               "✅ [AuthState] Lấy và lưu lại toàn bộ dữ liệu từ Firestore.",
+            );
+          } else {
+            // 🔥 THÊM: Ghi log nếu không tìm thấy doc (trường hợp race condition)
+            developer.log(
+              "ℹ️ [AuthState] Không tìm thấy doc Firestore khi auth state thay đổi (có thể user đang đăng ký).",
             );
           }
         } catch (e) {
@@ -95,9 +108,9 @@ class AuthService extends ChangeNotifier {
     }
 
     developer.log(
-      "📊 [AuthState] state: accountType=$accountType, username=$username",
+      "📊 [AuthState] state: accountType=$accountType, username=$username, orgSubmitted=$isOrganizationDetailsSubmitted",
     );
-    authService.value = this;
+    authService.value = this; // Đảm bảo value được cập nhật
     notifyListeners();
   }
 
@@ -112,8 +125,17 @@ class AuthService extends ChangeNotifier {
       walletAddress = await _secureStorage.read(key: _walletAddressStorageKey);
       accountType = await _secureStorage.read(key: _accountTypeStorageKey);
       username = await _secureStorage.read(key: _usernameStorageKey);
+
+      // 🔥 Tải cờ (lưu dưới dạng string 'true'/'false')
+      final orgDetailsString = await _secureStorage.read(
+        key: _orgDetailsSubmittedKey,
+      );
+      isOrganizationDetailsSubmitted = orgDetailsString == null
+          ? null
+          : (orgDetailsString == 'true');
+
       developer.log(
-        "✅ [Storage] Tải dữ liệu từ storage: username=$username, type=$accountType",
+        "✅ [Storage] Tải dữ liệu từ storage: username=$username, type=$accountType, orgSubmitted=$isOrganizationDetailsSubmitted",
       );
     } catch (e) {
       developer.log("❌ [Storage] Lỗi khi tải key: $e");
@@ -126,25 +148,29 @@ class AuthService extends ChangeNotifier {
     String? walletAddress,
     String? accountType,
     String? username,
+    bool? isOrganizationDetailsSubmitted, // 🔥 Thêm tham số
   }) async {
-    if (privateKey != null) {
+    if (privateKey != null)
       await _secureStorage.write(key: _privateKeyStorageKey, value: privateKey);
-    }
-    if (walletAddress != null) {
+    if (walletAddress != null)
       await _secureStorage.write(
         key: _walletAddressStorageKey,
         value: walletAddress,
       );
-    }
-    if (accountType != null) {
+    if (accountType != null)
       await _secureStorage.write(
         key: _accountTypeStorageKey,
         value: accountType,
       );
-    }
-    if (username != null) {
+    if (username != null)
       await _secureStorage.write(key: _usernameStorageKey, value: username);
-    }
+
+    // 🔥 Lưu cờ
+    if (isOrganizationDetailsSubmitted != null)
+      await _secureStorage.write(
+        key: _orgDetailsSubmittedKey,
+        value: isOrganizationDetailsSubmitted.toString(),
+      );
   }
 
   // =======================================================================
@@ -175,9 +201,11 @@ class AuthService extends ChangeNotifier {
       final walletAddr = data['eth_address'];
       final type = data['accountType'];
       final name = data['username'];
+      // 🔥 Lấy cờ
+      final orgDetails = data['isOrganizationDetailsSubmitted'] as bool?;
 
       developer.log(
-        "📄 [Firestore] Tải dữ liệu user: username=$name, accountType=$type, address=$walletAddr",
+        "📄 [Firestore] Tải dữ liệu user: username=$name, accountType=$type, orgSubmitted=$orgDetails",
       );
 
       if (pKey == null || walletAddr == null) {
@@ -190,6 +218,7 @@ class AuthService extends ChangeNotifier {
         walletAddress: walletAddr,
         accountType: type,
         username: name,
+        isOrganizationDetailsSubmitted: orgDetails, // 🔥 Lưu cờ
       );
       developer.log("🔑 [Storage] Đã lưu toàn bộ dữ liệu vào SecureStorage.");
 
@@ -198,6 +227,7 @@ class AuthService extends ChangeNotifier {
       walletAddress = walletAddr;
       username = name;
       accountType = type;
+      isOrganizationDetailsSubmitted = orgDetails; // 🔥 Cập nhật cờ
 
       authService.value = this;
       notifyListeners();
@@ -221,7 +251,6 @@ class AuthService extends ChangeNotifier {
     );
   }
 
-  //... (Các hàm còn lại giữ nguyên)
   Future<Map<String, String>?> getUserWalletByEmail(String email) async {
     try {
       developer.log("🔎 [AuthService] Đang tìm user theo email: $email");
@@ -271,10 +300,7 @@ class AuthService extends ChangeNotifier {
 
       final querySnapshot = await _firestore
           .collection('users')
-          .where(
-            'eth_address',
-            isEqualTo: ethAddress.toLowerCase(),
-          ) // Quan trọng: Đảm bảo so sánh lowercase
+          .where('eth_address', isEqualTo: ethAddress.toLowerCase())
           .limit(1)
           .get();
 
@@ -324,17 +350,61 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  // 🔥 ================== BƯỚC 1 (SỬA LỖI): THÊM HÀM MỚI ==================
+  /// Cập nhật state khi tổ chức điền form,
+  /// đảm bảo lưu cả vào bộ nhớ (state) và bộ nhớ an toàn (storage)
+  Future<void> markOrganizationDetailsAsSubmitted(String newUsername) async {
+    developer.log(
+      "🔄 [AuthService] Đánh dấu tổ chức đã nộp form, username=$newUsername",
+    );
+
+    // 1. Cập nhật state trong bộ nhớ (in-memory)
+    isOrganizationDetailsSubmitted = true;
+    username = newUsername;
+
+    try {
+      // 2. Cập nhật state vào bộ nhớ an toàn (Secure Storage)
+      // Rất quan trọng: Phải lưu lại tất cả các key khác
+      await _saveAllDataToSecureStorage(
+        privateKey: decryptedPrivateKey,
+        walletAddress: walletAddress,
+        accountType: accountType,
+        username: username, // Lưu username mới
+        isOrganizationDetailsSubmitted:
+            isOrganizationDetailsSubmitted, // Lưu cờ mới
+      );
+
+      developer.log(
+        "✅ [AuthService] Đã cập nhật SecureStorage: orgSubmitted=true, username=$newUsername",
+      );
+
+      // 3. Thông báo cho UI (AuthLayout) rebuild
+      // Gán lại .value để ValueNotifier chắc chắn nhận được thay đổi
+      authService.value = this;
+      notifyListeners();
+    } catch (e) {
+      developer.log(
+        "❌ [AuthService] Lỗi khi lưu cờ orgSubmitted vào SecureStorage: $e",
+      );
+    }
+  }
+  // 🔥 ===================================================================
+
   Future<void> signOut() async {
     developer.log("🚪 [SignOut] Đăng xuất");
     await _firebaseAuth.signOut();
     // Logic xóa đã được chuyển vào _onAuthStateChanged
   }
 
+  // 🔥🔥 SỬA LỖI: CẬP NHẬT CÁC TRƯỜNG STATE CỤC BỘ 🔥🔥
   set userData(Map<String, dynamic> data) {
+    // Cập nhật các trường state của instance
     decryptedPrivateKey = data['private_key'];
     walletAddress = data['eth_address'];
     username = data['username'];
     accountType = data['accountType'];
+    isOrganizationDetailsSubmitted =
+        data['isOrganizationDetailsSubmitted']; // 🔥 Thêm cờ
 
     // Lưu vào SecureStorage để lần sau đăng nhập tự load lại
     _saveAllDataToSecureStorage(
@@ -342,12 +412,17 @@ class AuthService extends ChangeNotifier {
       walletAddress: walletAddress,
       username: username,
       accountType: accountType,
+      isOrganizationDetailsSubmitted:
+          isOrganizationDetailsSubmitted, // 🔥 Thêm cờ
     );
 
     developer.log("📝 [UserData] Gán dữ liệu Firestore/Blockchain:");
-    developer.log("   username=$username, accountType=$accountType");
+    developer.log(
+      "   username=$username, accountType=$accountType, orgSubmitted=$isOrganizationDetailsSubmitted",
+    );
     developer.log("   walletAddress=$walletAddress");
 
+    // Thông báo cho ValueListenableBuilder (trong AuthLayout)
     authService.value = this;
     notifyListeners();
   }
