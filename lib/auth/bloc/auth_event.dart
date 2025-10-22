@@ -22,3 +22,8 @@ class AuthRegisterRequested extends AuthEvent {
 }
 
 class AuthLogoutRequested extends AuthEvent {}
+
+class AuthForgotPasswordRequested extends AuthEvent {
+  final String email;
+  AuthForgotPasswordRequested(this.email);
+}

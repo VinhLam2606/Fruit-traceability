@@ -32,6 +32,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthLoginRequested>(_onLoginRequested);
     on<AuthRegisterRequested>(_onRegisterRequested);
     on<AuthLogoutRequested>(_onLogoutRequested);
+    on<AuthForgotPasswordRequested>(_onForgotPasswordRequested);
   }
 
   Future<void> _initGanacheAccount() async {
@@ -105,9 +106,28 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoggedOut());
   }
 
-  // ------------------------------------------------------------
-  // 🔹 REGISTER EVENT (Blockchain + Firebase)
-  // ------------------------------------------------------------
+  Future<void> _onForgotPasswordRequested(
+      AuthForgotPasswordRequested event,
+      Emitter<AuthState> emit,
+      ) async {
+    emit(AuthLoading());
+    try {
+      print("📧 [AuthBloc] Requesting password reset for: ${event.email}");
+
+      // Gọi hàm từ AuthService
+      await _authService.sendPasswordResetEmail(email: event.email);
+
+      print("✅ [AuthBloc] Password reset email sent successfully.");
+
+      // Phát ra State thông báo thành công cho UI
+      emit(AuthPasswordResetEmailSent(event.email));
+    } catch (e) {
+      print("❌ [AuthBloc] Password reset failed: $e");
+      // Phát ra State thất bại
+      emit(AuthFailure(e.toString()));
+    }
+  }
+
   Future<void> _onRegisterRequested(
     AuthRegisterRequested event,
     Emitter<AuthState> emit,

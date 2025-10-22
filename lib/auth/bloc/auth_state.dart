@@ -22,3 +22,8 @@ class AuthFailure extends AuthState {
 }
 
 class AuthLoggedOut extends AuthState {}
+
+class AuthPasswordResetEmailSent extends AuthState {
+  final String email;
+  AuthPasswordResetEmailSent(this.email);
+}
