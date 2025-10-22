@@ -1,17 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:untitled/auth/service/auth_service.dart'; // 🔥 IMPORT AUTHSERVICE
+import 'package:untitled/auth/service/auth_service.dart';
 import 'package:untitled/auth/service/walletExt_service.dart';
 import 'package:web3dart/credentials.dart';
 
 import 'login_or_register_page.dart';
-// 💥 XÓA CÁC IMPORT LIÊN QUAN ĐẾN ĐIỀU HƯỚNG CŨ
-// import 'package:flutter_bloc/flutter_bloc.dart';
-// import 'package:http/http.dart' as http;
-// import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
-// import 'package:untitled/navigation/main_navigation.dart';
-// import 'package:web3dart/web3dart.dart';
 
 class OrganizationFormPage extends StatefulWidget {
   final String ethAddress;
@@ -32,18 +26,29 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
 
   final fullNameController = TextEditingController();
   final brandController = TextEditingController();
-  final businessTypeController = TextEditingController();
   final foundedYearController = TextEditingController();
   final addressController = TextEditingController();
   final emailController = TextEditingController();
   final phoneController = TextEditingController();
   bool _isSaving = false;
 
+  // Danh sách các loại hình doanh nghiệp
+  final List<String> _businessTypes = [
+    'LLC',
+    'Corporation',
+    'Partnership',
+    'Sole Proprietorship',
+    'Cooperative',
+    'Non-profit',
+    'Other'
+  ];
+
+  String? _selectedBusinessType;
+
   @override
   void dispose() {
     fullNameController.dispose();
     brandController.dispose();
-    businessTypeController.dispose();
     foundedYearController.dispose();
     addressController.dispose();
     emailController.dispose();
@@ -64,13 +69,13 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
         {
           "fullName": fullNameController.text.trim(),
           "brandName": brandController.text.trim(),
-          "businessType": businessTypeController.text.trim(),
+          "businessType": _selectedBusinessType,
           "foundedYear": foundedYearController.text.trim(),
           "address": addressController.text.trim(),
           "phoneNumber": phoneController.text.trim(),
           "email": emailController.text.trim(),
           "eth_address": widget.ethAddress
-              .toLowerCase(), // 💡 Luôn lưu lowercase
+              .toLowerCase(),
           "private_key": widget.privateKey,
           "createdAt": FieldValue.serverTimestamp(),
         },
@@ -105,15 +110,10 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
         print("🟡 Already has an organization on-chain, skipping creation.");
       } else {
         // 5️⃣ Register organization on-chain
-        // 💡 Sửa lỗi: Lấy tên từ brandController (hoặc fullName) thay vì username
         final txHash = await addOrganizationOnChain(
-          brandController.text.trim(), // Hoặc fullNameController.text.trim()
+          brandController.text.trim(),
           credentials,
         );
-
-        // 🔥🔥 SỬA LỖI: XÓA DÒNG NÀY ĐỂ TRÁNH BỊ TREO VĨNH VIỄN
-        // await waitForTxConfirmation(txHash);
-
         print("✅ Giao dịch đăng ký tổ chức ĐÃ GỬI: $txHash");
       }
 
@@ -141,7 +141,7 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const LoginOrRegisterPage()),
-          (route) => false,
+              (route) => false,
         );
       }
     } catch (e) {
@@ -153,12 +153,9 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
             backgroundColor: Colors.red,
           ),
         );
-
-        // 🔥🔥 SỬA LỖI: Chỉ setState(false) khi có lỗi
         setState(() => _isSaving = false);
       }
     } finally {
-      // 🔥🔥 SỬA LỖI: Đảm bảo khối finally rỗng
     }
   }
 
@@ -184,10 +181,40 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
             children: [
               _buildField("Full Company Name", fullNameController),
               _buildField("Brand / Short Name", brandController),
-              _buildField(
-                "Business Type (LLC, JSC...)",
-                businessTypeController,
+
+              // Thay thế _buildField bằng DropdownButtonFormField
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: DropdownButtonFormField<String>(
+                  value: _selectedBusinessType,
+                  style: const TextStyle(color: Colors.white),
+                  dropdownColor: const Color(0xFF243B55), // Màu nền của list
+                  decoration: InputDecoration(
+                    labelText: "Business Type",
+                    labelStyle: const TextStyle(color: Colors.white70),
+                    filled: true,
+                    fillColor: Colors.white10,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  items: _businessTypes.map((String type) {
+                    return DropdownMenuItem<String>(
+                      value: type,
+                      child: Text(type),
+                    );
+                  }).toList(),
+                  onChanged: (newValue) {
+                    setState(() {
+                      _selectedBusinessType = newValue;
+                    });
+                  },
+                  validator: (value) =>
+                  value == null ? "Please select a business type" : null,
+                ),
               ),
+
               _buildField(
                 "Founded Year",
                 foundedYearController,
@@ -217,17 +244,17 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
                 ),
                 child: _isSaving
                     ? const CircularProgressIndicator(
-                        color: Colors.black,
-                        strokeWidth: 2,
-                      )
+                  color: Colors.black,
+                  strokeWidth: 2,
+                )
                     : const Text(
-                        "SAVE ORGANIZATION",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
+                  "SAVE ORGANIZATION",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
               ),
             ],
           ),
@@ -237,10 +264,10 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
   }
 
   Widget _buildField(
-    String label,
-    TextEditingController controller, {
-    TextInputType keyboardType = TextInputType.text,
-  }) {
+      String label,
+      TextEditingController controller, {
+        TextInputType keyboardType = TextInputType.text,
+      }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
@@ -258,7 +285,7 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
           ),
         ),
         validator: (value) =>
-            value == null || value.isEmpty ? "Enter $label" : null,
+        value == null || value.isEmpty ? "Enter $label" : null,
       ),
     );
   }
