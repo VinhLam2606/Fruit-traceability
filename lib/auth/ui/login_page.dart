@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print, use_build_context_synchronously, deprecated_member_use
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -7,8 +8,6 @@ import 'package:untitled/auth/auth_layout.dart';
 import 'package:untitled/auth/bloc/auth_bloc.dart';
 import 'package:untitled/auth/bloc/auth_event.dart';
 import 'package:untitled/auth/bloc/auth_state.dart';
-
-// 🔥 import để điều hướng về AuthLayout
 
 class LoginPage extends StatefulWidget {
   final Function()? onTap;
@@ -30,6 +29,51 @@ class _LoginPageState extends State<LoginPage> {
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _resetPassword() async {
+    final email = emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Vui lòng nhập email của bạn vào ô bên trên."),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Hiển thị dialog loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Colors.greenAccent),
+      ),
+    );
+
+    try {
+      // Gửi email
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Đóng dialog loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("✅ Đã gửi link đặt lại mật khẩu! Vui lòng kiểm tra email."),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Đóng dialog loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("❌ Lỗi: ${e.message ?? 'Không thể gửi email'}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -98,7 +142,24 @@ class _LoginPageState extends State<LoginPage> {
                           ? "Please enter password"
                           : null,
                     ),
-                    const SizedBox(height: 35),
+
+                    // 🔥 WIDGET MỚI: FORGOT PASSWORD
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: GestureDetector(
+                        onTap: _resetPassword,
+                        child: const Text(
+                          "Forgot Password?",
+                          style: TextStyle(
+                            color: Colors.greenAccent,
+                            fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 25), // Giảm khoảng cách cũ (35)
 
                     // Login button
                     SizedBox(
@@ -114,7 +175,7 @@ class _LoginPageState extends State<LoginPage> {
                               MaterialPageRoute(
                                 builder: (_) => const AuthLayout(),
                               ),
-                              (route) => false,
+                                  (route) => false,
                             );
                           } else if (state is AuthFailure) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -133,15 +194,15 @@ class _LoginPageState extends State<LoginPage> {
                             onPressed: isLoading
                                 ? null
                                 : () {
-                                    if (_formKey.currentState!.validate()) {
-                                      context.read<AuthBloc>().add(
-                                        AuthLoginRequested(
-                                          emailController.text.trim(),
-                                          passwordController.text.trim(),
-                                        ),
-                                      );
-                                    }
-                                  },
+                              if (_formKey.currentState!.validate()) {
+                                context.read<AuthBloc>().add(
+                                  AuthLoginRequested(
+                                    emailController.text.trim(),
+                                    passwordController.text.trim(),
+                                  ),
+                                );
+                              }
+                            },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.greenAccent,
                               foregroundColor: Colors.black,
@@ -154,21 +215,21 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             child: isLoading
                                 ? const SizedBox(
-                                    height: 22,
-                                    width: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.black,
-                                    ),
-                                  )
+                              height: 22,
+                              width: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.black,
+                              ),
+                            )
                                 : const Text(
-                                    "LOGIN",
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.2,
-                                    ),
-                                  ),
+                              "LOGIN",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
                           );
                         },
                       ),

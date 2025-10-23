@@ -27,3 +27,8 @@ class AuthEmailVerificationPending extends AuthState {
   final String email;
   AuthEmailVerificationPending({required this.email});
 }
+
+class AuthPasswordResetEmailSent extends AuthState {
+  final String email;
+  AuthPasswordResetEmailSent(this.email);
+}

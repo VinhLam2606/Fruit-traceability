@@ -1,4 +1,4 @@
-import 'dart:developer' as developer; // Import developer log
+import 'dart:developer' as developer;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -175,9 +175,7 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  // =======================================================================
-  // 🔥 HÀM signIn ĐÃ ĐƯỢC CẬP NHẬT
-  // =======================================================================
+
   Future<UserCredential> signIn({
     required String email,
     required String password,
@@ -352,7 +350,6 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  // 🔥 ================== BƯỚC 1 (SỬA LỖI): THÊM HÀM MỚI ==================
   /// Cập nhật state khi tổ chức điền form,
   /// đảm bảo lưu cả vào bộ nhớ (state) và bộ nhớ an toàn (storage)
   Future<void> markOrganizationDetailsAsSubmitted(String newUsername) async {
@@ -390,7 +387,6 @@ class AuthService extends ChangeNotifier {
       );
     }
   }
-  // 🔥 ===================================================================
 
   Future<void> signOut() async {
     developer.log("🚪 [SignOut] Đăng xuất");
@@ -398,7 +394,7 @@ class AuthService extends ChangeNotifier {
     // Logic xóa đã được chuyển vào _onAuthStateChanged
   }
 
-  // 🔥🔥 SỬA LỖI: CẬP NHẬT CÁC TRƯỜNG STATE CỤC BỘ 🔥🔥
+
   set userData(Map<String, dynamic> data) {
     // Cập nhật các trường state của instance
     decryptedPrivateKey = data['private_key'];
@@ -406,16 +402,15 @@ class AuthService extends ChangeNotifier {
     username = data['username'];
     accountType = data['accountType'];
     isOrganizationDetailsSubmitted =
-        data['isOrganizationDetailsSubmitted']; // 🔥 Thêm cờ
+        data['isOrganizationDetailsSubmitted'];
 
-    // Lưu vào SecureStorage để lần sau đăng nhập tự load lại
     _saveAllDataToSecureStorage(
       privateKey: decryptedPrivateKey,
       walletAddress: walletAddress,
       username: username,
       accountType: accountType,
       isOrganizationDetailsSubmitted:
-          isOrganizationDetailsSubmitted, // 🔥 Thêm cờ
+          isOrganizationDetailsSubmitted,
     );
 
     developer.log("📝 [UserData] Gán dữ liệu Firestore/Blockchain:");
@@ -448,5 +443,23 @@ class AuthService extends ChangeNotifier {
     final user = _firebaseAuth.currentUser;
     await user?.reload();
     return user?.emailVerified ?? false;
+  }
+
+  Future<void> sendPasswordResetEmail({required String email}) async {
+    developer.log("📧 [ForgotPassword] Gửi yêu cầu đặt lại mật khẩu cho $email");
+    try {
+      await _firebaseAuth.sendPasswordResetEmail(email: email);
+      developer.log(
+        "✅ [ForgotPassword] Đã gửi email đặt lại mật khẩu thành công.",
+      );
+    } on FirebaseAuthException catch (e) {
+      developer.log("❌ [ForgotPassword] Lỗi Firebase: ${e.code}");
+      // Xử lý các lỗi phổ biến (ví dụ: auth/user-not-found)
+      // Thường nên rethrow để AuthBloc xử lý việc hiển thị thông báo.
+      rethrow;
+    } catch (e) {
+      developer.log("❌ [ForgotPassword] Lỗi không xác định: $e");
+      rethrow;
+    }
   }
 }

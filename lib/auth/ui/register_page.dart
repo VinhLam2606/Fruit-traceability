@@ -7,8 +7,8 @@ import 'package:untitled/auth/auth_layout.dart';
 import 'package:untitled/auth/bloc/auth_bloc.dart';
 import 'package:untitled/auth/bloc/auth_event.dart';
 import 'package:untitled/auth/bloc/auth_state.dart';
+import 'package:untitled/auth/ui/organization_form_page.dart';
 import 'package:web3dart/web3dart.dart';
-import 'organization_form_page.dart';
 
 class RegisterPage extends StatefulWidget {
   final Function()? onTap;
@@ -27,6 +27,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   String accountType = "user";
   String errorMessage = '';
+  final bool _isLoading = false;
 
   late Web3Client ethClient;
   DeployedContract? usersContract;
