@@ -21,6 +21,11 @@ class AuthRegisterRequested extends AuthEvent {
   });
 }
 
+class AuthEmailVerificationChecked extends AuthEvent {
+  final String email;
+  AuthEmailVerificationChecked(this.email);
+}
+
 class AuthLogoutRequested extends AuthEvent {}
 
 class AuthForgotPasswordRequested extends AuthEvent {

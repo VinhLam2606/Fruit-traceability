@@ -1,3 +1,4 @@
+// product_management.dart
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -5,22 +6,33 @@ import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart'; // Đã có import này
+import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:untitled/dashboard/bloc/dashboard_bloc.dart';
-import 'package:untitled/dashboard/model/product.dart'; // Đã có import này (chứa Product và ProcessStep)
+import 'package:untitled/dashboard/model/product.dart';
 import 'package:untitled/dashboard/ui/create_product_page.dart';
 
-class ProductManagementPage extends StatelessWidget {
+// ================= 💡 ĐÃ CHUYỂN SANG STATEFULWIDGET =================
+class ProductManagementPage extends StatefulWidget {
   const ProductManagementPage({super.key});
 
+  @override
+  State<ProductManagementPage> createState() => _ProductManagementPageState();
+}
+
+class _ProductManagementPageState extends State<ProductManagementPage> {
   static const List<Color> _backgroundGradient = [
     Color(0xFF141E30),
     Color(0xFF243B55),
   ];
   static const Color _accentColor = Colors.greenAccent;
   static const Color _cardColor = Colors.white10;
+
+  // ================= 💡 BIẾN STATE ĐỂ LƯU SELECTION =================
+  final Set<String> _selectedBatchIds = {}; // Lưu các batchId được chọn
+  bool _selectAll = false;
+  // =================================================================
 
   String _formatTimestamp(BigInt timestamp) {
     if (timestamp == BigInt.zero) return "N/A";
@@ -44,7 +56,9 @@ class ProductManagementPage extends StatelessWidget {
     );
   }
 
-  void _showTransferProductModal(BuildContext context, Product product) {
+  // ================= 💡 HÀM TRANSFER ĐÃ ĐƯỢC CẬP NHẬT =================
+  // Giờ đây nó nhận vào một danh sách các Batch ID
+  void _showTransferProductModal(BuildContext context, List<String> batchIds) {
     final TextEditingController receiverIdController = TextEditingController();
     showDialog(
       context: context,
@@ -55,7 +69,7 @@ class ProductManagementPage extends StatelessWidget {
             borderRadius: BorderRadius.circular(15),
           ),
           title: Text(
-            "Transfer Product: ${product.name}",
+            "Transfer ${batchIds.length} Product(s)", // Title động
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
@@ -64,10 +78,11 @@ class ProductManagementPage extends StatelessWidget {
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Batch ID: ${product.batchId}",
-                  style: const TextStyle(color: Colors.white70),
+                  "Selected batch IDs:\n${batchIds.join(", ")}", // Hiển thị các ID
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -101,12 +116,20 @@ class ProductManagementPage extends StatelessWidget {
               onPressed: () {
                 final receiverId = receiverIdController.text;
                 if (receiverId.isNotEmpty) {
-                  context.read<DashboardBloc>().add(
-                    TransferProductEvent(
-                      batchId: product.batchId,
-                      receiverOrganizationId: receiverId,
-                    ),
-                  );
+                  // 💡 Lặp qua từng batchId và gửi sự kiện
+                  for (final batchId in batchIds) {
+                    context.read<DashboardBloc>().add(
+                      TransferProductEvent(
+                        batchId: batchId,
+                        receiverOrganizationId: receiverId,
+                      ),
+                    );
+                  }
+                  // Xóa selection sau khi gửi
+                  setState(() {
+                    _selectedBatchIds.clear();
+                    _selectAll = false;
+                  });
                   Navigator.of(ctx).pop();
                 }
               },
@@ -121,6 +144,7 @@ class ProductManagementPage extends StatelessWidget {
       },
     );
   }
+  // =================================================================
 
   Future<void> _saveBarcodePNG(
     BuildContext context,
@@ -180,9 +204,17 @@ class ProductManagementPage extends StatelessWidget {
     }
   }
 
-  void _showErrorDialog(BuildContext context, String message) {
+  // ==================== 💡 HÀM DIALOG ĐÃ SỬA ====================
+  // Thêm 'isInitError' để quyết định hiển thị nút "Đã hiểu" hay "Thử lại"
+  void _showErrorDialog(
+    BuildContext context,
+    String message, {
+    bool isInitError = false,
+  }) {
     showDialog(
       context: context,
+      // Không cho đóng dialog nếu là lỗi khởi tạo
+      barrierDismissible: !isInitError,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF243B55),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -195,19 +227,36 @@ class ProductManagementPage extends StatelessWidget {
         ),
         content: Text(message, style: const TextStyle(color: Colors.white70)),
         actions: <Widget>[
-          TextButton(
-            child: const Text(
-              'Đã hiểu',
-              style: TextStyle(color: _accentColor, fontSize: 16),
+          // Nếu KHÔNG phải lỗi khởi tạo (vd: lỗi transfer), hiện "Đã hiểu"
+          if (!isInitError)
+            TextButton(
+              child: const Text(
+                'Đã hiểu',
+                style: TextStyle(color: _accentColor, fontSize: 16),
+              ),
+              onPressed: () {
+                Navigator.of(ctx).pop(); // Đóng dialog
+              },
             ),
-            onPressed: () {
-              Navigator.of(ctx).pop(); // Đóng dialog
-            },
-          ),
+
+          // Nếu LÀ lỗi khởi tạo, hiện "Thử lại"
+          if (isInitError)
+            TextButton(
+              child: const Text(
+                'Thử lại',
+                style: TextStyle(color: _accentColor, fontSize: 16),
+              ),
+              onPressed: () {
+                Navigator.of(ctx).pop(); // Đóng dialog
+                // Gọi lại sự kiện fetch products
+                context.read<DashboardBloc>().add(FetchProductsEvent());
+              },
+            ),
         ],
       ),
     );
   }
+  // =================================================================
 
   void _showProductDetailsDialog(BuildContext context, Product product) {
     showDialog(
@@ -246,6 +295,7 @@ class ProductManagementPage extends StatelessWidget {
             ),
           ],
         ),
+        // ==================== 💡 LISTENER (GIỮ NGUYÊN) ====================
         body: BlocConsumer<DashboardBloc, DashboardState>(
           listener: (context, state) {
             if (state is DashboardSuccessState &&
@@ -256,40 +306,53 @@ class ProductManagementPage extends StatelessWidget {
                   backgroundColor: _accentColor,
                 ),
               );
-            } else if (state is DashboardErrorState &&
-                !state.error.contains("create product")) {
-              _showErrorDialog(context, state.error);
+            } else if (state is DashboardErrorState) {
+              // Xác định xem đây có phải là lỗi khởi tạo/tải trang không
+              final bool isInitError =
+                  state.error.contains("Lỗi khởi tạo") ||
+                  state.error.contains("Failed to load products");
+
+              // Chỉ hiện dialog nếu không phải lỗi "create product"
+              if (!state.error.contains("create product")) {
+                _showErrorDialog(
+                  context,
+                  state.error,
+                  isInitError: isInitError,
+                );
+              }
             }
           },
+          // ==================== 💡 BUILDER ĐÃ SỬA ====================
           builder: (context, state) {
-            final products = state is ProductsLoadedState
-                ? state.products
-                : <Product>[];
+            final products = state.products;
             products.sort((a, b) => b.date.compareTo(a.date));
 
+            // (Biến isInitError này vẫn được dùng trong listener, không cần xóa)
+            // final bool isInitError =
+            //     state is DashboardErrorState &&
+            //     (state.error.contains("Lỗi khởi tạo") ||
+            //         state.error.contains("Failed to load products"));
+
+            // ================== 💡💡💡 SỬA LỖI Ở ĐÂY 💡💡💡 ==================
+            // Chỉ hiển thị loading spinner toàn màn hình khi
+            // state là Loading VÀ danh sách rỗng (lần tải đầu)
             if (state is DashboardLoadingState && products.isEmpty) {
               return const Center(
                 child: CircularProgressIndicator(color: _accentColor),
               );
             }
-            if (state is DashboardErrorState && products.isEmpty) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Text(
-                    "Error loading products: ${state.error}",
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.redAccent,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              );
-            }
+            // ==============================================================
+
+            // Nếu là lỗi (ví dụ: "Lỗi khởi tạo") và products.isEmpty,
+            // code sẽ KHÔNG vào if ở trên nữa.
+            // Nó sẽ tiếp tục render Column, và Expanded bên dưới
+            // sẽ hiển thị "No products found."
+            // Trong khi đó, `listener` sẽ lo việc hiển thị dialog lỗi.
 
             return Column(
               children: [
+                if (state is DashboardLoadingState && products.isNotEmpty)
+                  const LinearProgressIndicator(color: _accentColor),
                 Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: ElevatedButton.icon(
@@ -312,11 +375,62 @@ class ProductManagementPage extends StatelessWidget {
                     ),
                   ),
                 ),
+
+                // ================= 💡 THANH CHỌN TẤT CẢ VÀ TRANSFER =================
+                if (products.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      children: [
+                        Checkbox(
+                          value: _selectAll,
+                          activeColor: _accentColor,
+                          onChanged: (val) {
+                            setState(() {
+                              _selectAll = val ?? false;
+                              if (_selectAll) {
+                                _selectedBatchIds.addAll(
+                                  products.map((e) => e.batchId),
+                                );
+                              } else {
+                                _selectedBatchIds.clear();
+                              }
+                            });
+                          },
+                        ),
+                        const Text(
+                          "Select All",
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        const Spacer(),
+                        if (_selectedBatchIds.isNotEmpty)
+                          ElevatedButton.icon(
+                            onPressed: () => _showTransferProductModal(
+                              context,
+                              _selectedBatchIds.toList(),
+                            ),
+                            icon: const Icon(Icons.send),
+                            label: Text(
+                              "Transfer Selected (${_selectedBatchIds.length})",
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _accentColor,
+                              foregroundColor: Colors.black,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                // ===================================================================
                 Expanded(
                   child: products.isEmpty
                       ? const Center(
                           child: Text(
-                            "No products found.",
+                            "No products found.", // Sẽ hiển thị nếu tải lỗi
                             style: TextStyle(color: Colors.white70),
                           ),
                         )
@@ -325,6 +439,10 @@ class ProductManagementPage extends StatelessWidget {
                           itemBuilder: (context, index) {
                             final Product product = products[index];
                             final barcodeKey = GlobalKey();
+                            // 💡 Kiểm tra xem item này có đang được chọn không
+                            final isSelected = _selectedBatchIds.contains(
+                              product.batchId,
+                            );
 
                             return Container(
                               margin: const EdgeInsets.symmetric(
@@ -334,13 +452,41 @@ class ProductManagementPage extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: _cardColor,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.white12),
+                                // 💡 Thêm viền border nếu được chọn
+                                border: Border.all(
+                                  color: isSelected
+                                      ? _accentColor
+                                      : Colors.white12,
+                                  width: isSelected ? 2.0 : 1.0,
+                                ),
                               ),
                               child: Padding(
                                 padding: const EdgeInsets.all(16.0),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // ================= 💡 CHECKBOX CHO TỪNG ITEM =================
+                                    Checkbox(
+                                      value: isSelected,
+                                      activeColor: _accentColor,
+                                      onChanged: (val) {
+                                        setState(() {
+                                          if (val == true) {
+                                            _selectedBatchIds.add(
+                                              product.batchId,
+                                            );
+                                          } else {
+                                            _selectedBatchIds.remove(
+                                              product.batchId,
+                                            );
+                                            // Nếu bỏ chọn 1 item, "Select All" phải là false
+                                            _selectAll = false;
+                                          }
+                                        });
+                                      },
+                                    ),
+
+                                    // ==========================================================
                                     CircleAvatar(
                                       backgroundColor: _accentColor.withOpacity(
                                         0.3,
@@ -422,20 +568,8 @@ class ProductManagementPage extends StatelessWidget {
                                     Column(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.send,
-                                            color: _accentColor,
-                                            size: 26,
-                                          ),
-                                          tooltip: 'Transfer Product',
-                                          onPressed: () =>
-                                              _showTransferProductModal(
-                                                context,
-                                                product,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 10),
+                                        // ================= 💡 NÚT TRANSFER ĐÃ BỊ XÓA =================
+                                        // ============================================================
                                         IconButton(
                                           icon: const Icon(
                                             Icons.info_outline,
@@ -466,6 +600,9 @@ class ProductManagementPage extends StatelessWidget {
     );
   }
 }
+
+// ====================== 💡 WIDGET NÀY GIỮ NGUYÊN ======================
+// (Đã copy từ file của bạn)
 
 class ProductDetailsDialog extends StatelessWidget {
   final Product product;
@@ -521,6 +658,8 @@ class ProductDetailsDialog extends StatelessWidget {
                 isAddress: true,
               ),
               _buildDetailRow("Organization:", product.organizationName),
+              const SizedBox(height: 20),
+              _buildProcessSteps(),
             ],
           ),
         ),
@@ -544,6 +683,76 @@ class ProductDetailsDialog extends StatelessWidget {
                 fontWeight: FontWeight.w500,
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProcessSteps() {
+    // Nhớ rằng product.processSteps sẽ rỗng (do ta sửa ở product.dart)
+    // Phần này sẽ được làm ở bước sau (khi tải chi tiết)
+    if (product.processSteps.isEmpty) {
+      return const Center(
+        child: Text(
+          "No process history available.",
+          style: TextStyle(color: Colors.white54, fontStyle: FontStyle.italic),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Process History",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...product.processSteps.map((step) => _buildProcessStepCard(step)),
+      ],
+    );
+  }
+
+  Widget _buildProcessStepCard(ProcessStep step) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            step.processName,
+            style: const TextStyle(
+              color: Colors.greenAccent,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(step.description, style: const TextStyle(color: Colors.white70)),
+          const Divider(color: Colors.white12, height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                step.organizationName,
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              Text(
+                _formatTimestamp(step.date),
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
           ),
         ],
       ),

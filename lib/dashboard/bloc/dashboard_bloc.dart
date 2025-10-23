@@ -28,6 +28,9 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   late ContractFunction _transferProductFunction;
   late ContractFunction _getOrganizationOwnerFunction;
 
+  // 💡 Biến nội bộ để lưu danh sách sản phẩm hiện tại
+  List<Product> _currentProducts = [];
+
   DashboardBloc({required this.web3client, required this.credentials})
     : super(DashboardInitial()) {
     on<DashboardInitialFetchEvent>(_dashboardInitialFetchEvent);
@@ -36,12 +39,11 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     on<TransferProductEvent>(_transferProductEvent);
   }
 
-  // ... (Hàm _dashboardInitialFetchEvent và _checkManufacturer giữ nguyên) ...
-
   FutureOr<void> _dashboardInitialFetchEvent(
     DashboardInitialFetchEvent event,
     Emitter<DashboardState> emit,
   ) async {
+    // 💡 Sửa đổi ở đây: Vẫn loading ban đầu
     emit(DashboardLoadingState());
     try {
       final address = credentials.address;
@@ -94,7 +96,13 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       add(FetchProductsEvent());
     } catch (e, st) {
       developer.log("❌ [Init] DashboardBloc error", error: e, stackTrace: st);
-      emit(DashboardErrorState("Lỗi khởi tạo: ${e.toString()}"));
+      // 💡 Lỗi init thì danh sách là rỗng
+      emit(
+        DashboardErrorState(
+          "Lỗi khởi tạo: ${e.toString()}",
+          products: _currentProducts, // (vẫn rỗng)
+        ),
+      );
     }
   }
 
@@ -138,44 +146,56 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     developer.log("✅ User là Manufacturer và thuộc Organization → OK");
   }
 
-  // ==================== 💡 HÀM 1 ĐƯỢC CẬP NHẬT ====================
   FutureOr<void> _createProductButtonPressedEvent(
     CreateProductButtonPressedEvent event,
     Emitter<DashboardState> emit,
   ) async {
-    emit(DashboardLoadingState());
+    // 💡 Truyền danh sách HIỆN TẠI vào state loading
+    emit(DashboardLoadingState(products: _currentProducts));
     try {
       final txHash = await web3client.sendTransaction(
         credentials,
         Transaction.callContract(
           contract: deployedContract,
           function: _addProductFunction,
-          // Cập nhật tham số để khớp với contract
           parameters: [
             event.batchId,
             event.name,
             BigInt.from(event.date),
-            event.seedVariety, // Thêm seedVariety
-            event.origin, // Thêm origin
+            event.seedVariety,
+            event.origin,
           ],
         ),
         chainId: 1337,
       );
 
       developer.log("✅ Product created! TxHash: $txHash");
-      emit(DashboardSuccessState("✅ Product created! TxHash: $txHash"));
+      // 💡 Truyền danh sách HIỆN TẠI vào state success
+      emit(
+        DashboardSuccessState(
+          "✅ Product created! TxHash: $txHash",
+          products: _currentProducts,
+        ),
+      );
+      // Cân nhắc: add(FetchProductsEvent()); để làm mới
     } catch (e, st) {
       developer.log("❌ [CreateProduct] Failed", error: e, stackTrace: st);
-      emit(DashboardErrorState("❌ Failed to create product: $e"));
+      // 💡 Truyền danh sách HIỆN TẠI vào state error
+      emit(
+        DashboardErrorState(
+          "❌ Failed to create product: $e",
+          products: _currentProducts,
+        ),
+      );
     }
   }
 
-  // ==================== HÀM Chuyển giao (Giữ nguyên) ====================
   FutureOr<void> _transferProductEvent(
     TransferProductEvent event,
     Emitter<DashboardState> emit,
   ) async {
-    emit(DashboardLoadingState());
+    // 💡 Truyền danh sách HIỆN TẠI vào state loading
+    emit(DashboardLoadingState(products: _currentProducts));
     try {
       // 1. Tra cứu địa chỉ ví của chủ sở hữu tổ chức nhận
       final ownerResult = await web3client.call(
@@ -188,10 +208,12 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
       // Kiểm tra địa chỉ có hợp lệ không (address(0) nếu không tìm thấy)
       if (receiverAddress.hex == "0x0000000000000000000000000000000000000000") {
-        // Thay vì throw Exception, emit một lỗi có thông báo rõ ràng
+        // 💡💡💡 ĐÂY LÀ PHẦN SỬA CHÍNH CỦA BẠN 💡💡💡
+        // Emit lỗi, nhưng VẪN kèm theo danh sách sản phẩm hiện tại
         emit(
           DashboardErrorState(
             "Không tìm thấy tổ chức với ID '${event.receiverOrganizationId}'. Vui lòng kiểm tra lại.",
+            products: _currentProducts, // <--- THÊM DÒNG NÀY
           ),
         );
         // Dừng hàm tại đây
@@ -210,18 +232,29 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       );
 
       developer.log("✅ Product transferred! TxHash: $txHash");
-      emit(DashboardSuccessState("✅ Chuyển giao sản phẩm thành công!"));
+      // 💡 Truyền danh sách HIỆN TẠI vào state success
+      emit(
+        DashboardSuccessState(
+          "✅ Chuyển giao sản phẩm thành công!",
+          products: _currentProducts,
+        ),
+      );
 
       // Sau khi chuyển giao xong, fetch lại danh sách sản phẩm
       add(FetchProductsEvent());
     } catch (e, st) {
       developer.log("❌ [TransferProduct] Failed", error: e, stackTrace: st);
-      emit(DashboardErrorState("❌ Lỗi khi chuyển giao sản phẩm: $e"));
+      // 💡 Truyền danh sách HIỆN TẠI vào state error
+      emit(
+        DashboardErrorState(
+          "❌ Lỗi khi chuyển giao sản phẩm: $e",
+          products: _currentProducts,
+        ),
+      );
     }
   }
   // ===============================================================
 
-  // ==================== 💡 HÀM 2 ĐƯỢC CẬP NHẬT ====================
   Future<void> createProductDirectly({
     required String batchId,
     required String name,
@@ -246,7 +279,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     FetchProductsEvent event,
     Emitter<DashboardState> emit,
   ) async {
-    emit(DashboardLoadingState());
+    // 💡 Khi fetch, chúng ta emit state loading VỚI danh sách (cũ)
+    emit(DashboardLoadingState(products: _currentProducts));
     try {
       final address = credentials.address;
       final result = await web3client.call(
@@ -270,11 +304,21 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         products = [];
       }
 
+      // 💡 Cập nhật biến nội bộ
+      _currentProducts = products;
+
       developer.log("✅ Loaded ${products.length} products.");
+      // 💡 Emit state MỚI với danh sách MỚI
       emit(ProductsLoadedState(products));
     } catch (e, st) {
       developer.log("❌ [FetchProducts] Failed", error: e, stackTrace: st);
-      emit(DashboardErrorState("❌ Failed to load products: $e"));
+      // 💡 Nếu fetch lỗi, emit lỗi VỚI danh sách (cũ) để UI không bị vỡ
+      emit(
+        DashboardErrorState(
+          "❌ Failed to load products: $e",
+          products: _currentProducts,
+        ),
+      );
     }
   }
 }
