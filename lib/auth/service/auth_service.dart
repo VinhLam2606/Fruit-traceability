@@ -114,9 +114,6 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // =======================================================================
-  // 🔥 HÀM _loadKeyFromSecureStorage ĐÃ ĐƯỢC CẬP NHẬT
-  // =======================================================================
   Future<void> _loadKeyFromSecureStorage() async {
     try {
       decryptedPrivateKey = await _secureStorage.read(
@@ -150,27 +147,32 @@ class AuthService extends ChangeNotifier {
     String? username,
     bool? isOrganizationDetailsSubmitted, // 🔥 Thêm tham số
   }) async {
-    if (privateKey != null)
+    if (privateKey != null) {
       await _secureStorage.write(key: _privateKeyStorageKey, value: privateKey);
-    if (walletAddress != null)
+    }
+    if (walletAddress != null) {
       await _secureStorage.write(
         key: _walletAddressStorageKey,
         value: walletAddress,
       );
-    if (accountType != null)
+    }
+    if (accountType != null) {
       await _secureStorage.write(
         key: _accountTypeStorageKey,
         value: accountType,
       );
-    if (username != null)
+    }
+    if (username != null) {
       await _secureStorage.write(key: _usernameStorageKey, value: username);
+    }
 
     // 🔥 Lưu cờ
-    if (isOrganizationDetailsSubmitted != null)
+    if (isOrganizationDetailsSubmitted != null) {
       await _secureStorage.write(
         key: _orgDetailsSubmittedKey,
         value: isOrganizationDetailsSubmitted.toString(),
       );
+    }
   }
 
   // =======================================================================
@@ -425,5 +427,26 @@ class AuthService extends ChangeNotifier {
     // Thông báo cho ValueListenableBuilder (trong AuthLayout)
     authService.value = this;
     notifyListeners();
+  }
+
+  // In auth_service.dart
+  Future<void> sendEmailVerification(User user) async {
+    try {
+      if (!user.emailVerified) {
+        await user.sendEmailVerification();
+        developer.log(
+          "📧 [AuthService] Verification email sent to ${user.email}",
+        );
+      }
+    } catch (e) {
+      developer.log("❌ [AuthService] Error sending verification email: $e");
+      rethrow;
+    }
+  }
+
+  Future<bool> isEmailVerified() async {
+    final user = _firebaseAuth.currentUser;
+    await user?.reload();
+    return user?.emailVerified ?? false;
   }
 }

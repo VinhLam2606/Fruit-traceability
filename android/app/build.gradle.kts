@@ -54,7 +54,7 @@ dependencies {
     // Cloud Firestore
     implementation("com.google.firebase:firebase-firestore")
 
-    // Firebase Analytics (optional, bạn có thể bỏ nếu không cần)
-    implementation("com.google.firebase:firebase-analytics")
+    // Google Play Service
+    implementation("com.google.android.gms:play-services-auth:21.4.0")
 }
 

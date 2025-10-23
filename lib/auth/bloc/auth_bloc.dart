@@ -32,11 +32,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthLoginRequested>(_onLoginRequested);
     on<AuthRegisterRequested>(_onRegisterRequested);
     on<AuthLogoutRequested>(_onLogoutRequested);
+    on<AuthEmailVerificationChecked>(_onEmailVerificationChecked);
   }
 
   Future<void> _initGanacheAccount() async {
     const mnemonic =
-        "empower ocean injury exchange diesel hub veteran athlete cake resist hurdle response";
+        "journey silk gossip expand violin spice select common emotion leader squeeze someone";
 
     final ganacheAccounts = await _getGanacheAccounts();
     if (ganacheAccounts.isEmpty) {
@@ -157,6 +158,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         email: event.email,
         password: event.password,
       );
+
+      await _authService.sendEmailVerification(userCred.user!);
+
+      // 🔹 Ask user to verify first
+      emit(AuthEmailVerificationPending(email: event.email));
 
       // 6️⃣ Save Firestore record
       await FirebaseFirestore.instance
@@ -280,6 +286,26 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     );
     print("👤 registerUser tx: $txHash");
     return txHash;
+  }
+
+  // In auth_bloc.dart
+  Future<void> _onEmailVerificationChecked(
+    AuthEmailVerificationChecked event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(AuthLoading());
+    final verified = await _authService.isEmailVerified();
+    if (verified) {
+      emit(
+        AuthSuccess(
+          username: _authService.username ?? '',
+          walletAddress: _authService.walletAddress ?? '',
+          accountType: _authService.accountType ?? '',
+        ),
+      );
+    } else {
+      emit(AuthFailure("Email not verified yet"));
+    }
   }
 
   Future<String> _addOrganization(
