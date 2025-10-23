@@ -181,6 +181,35 @@ class OrganizationManagementPage extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+
+                // ==================== 💡 CODE ĐÃ SỬA ====================
+                // Hiển thị Org ID (từ blockchain) nếu nó khác với brandName
+                if (org.brandName != null &&
+                    org.brandName != org.organizationName)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0), // Thêm padding
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.badge_outlined, // Icon cho ID
+                          color: _accentColor, // Giữ màu icon là màu accent
+                          size: 16,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          "Org ID: ${org.organizationName}",
+                          style: const TextStyle(
+                            color: Colors.white70, // Đổi màu chữ sang trắng
+                            fontSize: 14, // Tăng size 1 chút
+                            fontStyle: FontStyle.normal, // Bỏ nghiêng
+                            fontWeight: FontWeight.bold, // In đậm
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // ========================================================
                 const SizedBox(height: 12),
                 _buildInfoRow(
                   Icons.business,

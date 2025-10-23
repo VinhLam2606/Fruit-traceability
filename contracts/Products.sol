@@ -141,7 +141,6 @@ contract Products is Users {
         if (!users[msg.sender].isAlreadyInAnyOrganization) revert NotInOrg();
 
         uint256 idx = productIndexByBatchId[batchId];
-        Types.Product storage p = products[idx];
 
         address orgOwner = memberToOrganizationOwner[msg.sender];
         string memory orgName = organizations[orgOwner].organizationName;

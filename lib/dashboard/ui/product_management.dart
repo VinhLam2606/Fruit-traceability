@@ -123,10 +123,10 @@ class ProductManagementPage extends StatelessWidget {
   }
 
   Future<void> _saveBarcodePNG(
-      BuildContext context,
-      GlobalKey repaintKey,
-      String batchId,
-      ) async {
+    BuildContext context,
+    GlobalKey repaintKey,
+    String batchId,
+  ) async {
     try {
       if (Platform.isAndroid) {
         final permissions = await [
@@ -146,8 +146,8 @@ class ProductManagementPage extends StatelessWidget {
       }
 
       final boundary =
-      repaintKey.currentContext!.findRenderObject()
-      as RenderRepaintBoundary;
+          repaintKey.currentContext!.findRenderObject()
+              as RenderRepaintBoundary;
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       final pngBytes = byteData!.buffer.asUint8List();
@@ -315,148 +315,148 @@ class ProductManagementPage extends StatelessWidget {
                 Expanded(
                   child: products.isEmpty
                       ? const Center(
-                    child: Text(
-                      "No products found.",
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                  )
+                          child: Text(
+                            "No products found.",
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        )
                       : ListView.builder(
-                    itemCount: products.length,
-                    itemBuilder: (context, index) {
-                      final Product product = products[index];
-                      final barcodeKey = GlobalKey();
+                          itemCount: products.length,
+                          itemBuilder: (context, index) {
+                            final Product product = products[index];
+                            final barcodeKey = GlobalKey();
 
-                      return Container(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _cardColor,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white12),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              CircleAvatar(
-                                backgroundColor: _accentColor.withOpacity(
-                                  0.3,
-                                ),
-                                child: const Icon(
-                                  Icons.inventory_2,
-                                  color: _accentColor,
-                                ),
+                            return Container(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                              decoration: BoxDecoration(
+                                color: _cardColor,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white12),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      product.name,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                        fontSize: 16,
+                                    CircleAvatar(
+                                      backgroundColor: _accentColor.withOpacity(
+                                        0.3,
+                                      ),
+                                      child: const Icon(
+                                        Icons.inventory_2,
+                                        color: _accentColor,
                                       ),
                                     ),
-                                    Text(
-                                      "Batch ID: ${product.batchId}",
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                    Text(
-                                      "Date Created: ${_formatTimestamp(product.date)}",
-                                      style: const TextStyle(
-                                        color: Colors.white54,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Center(
-                                      child: RepaintBoundary(
-                                        key: barcodeKey,
-                                        child: Container(
-                                          width: 250,
-                                          height: 70,
-                                          color: Colors.white,
-                                          padding: const EdgeInsets.all(
-                                            4,
-                                          ),
-                                          child: BarcodeWidget(
-                                            barcode: Barcode.code128(),
-                                            data: product.batchId,
-                                            drawText: true,
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            product.name,
                                             style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
                                               fontSize: 16,
-                                              color: Colors.black,
                                             ),
-                                            color: Colors.black,
                                           ),
-                                        ),
+                                          Text(
+                                            "Batch ID: ${product.batchId}",
+                                            style: const TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          Text(
+                                            "Date Created: ${_formatTimestamp(product.date)}",
+                                            style: const TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Center(
+                                            child: RepaintBoundary(
+                                              key: barcodeKey,
+                                              child: Container(
+                                                width: 250,
+                                                height: 70,
+                                                color: Colors.white,
+                                                padding: const EdgeInsets.all(
+                                                  4,
+                                                ),
+                                                child: BarcodeWidget(
+                                                  barcode: Barcode.code128(),
+                                                  data: product.batchId,
+                                                  drawText: true,
+                                                  style: const TextStyle(
+                                                    fontSize: 16,
+                                                    color: Colors.black,
+                                                  ),
+                                                  color: Colors.black,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          Center(
+                                            child: IconButton(
+                                              icon: const Icon(
+                                                Icons.download_rounded,
+                                                color: _accentColor,
+                                              ),
+                                              tooltip: "Download Barcode",
+                                              onPressed: () => _saveBarcodePNG(
+                                                context,
+                                                barcodeKey,
+                                                product.batchId,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    Center(
-                                      child: IconButton(
-                                        icon: const Icon(
-                                          Icons.download_rounded,
-                                          color: _accentColor,
+                                    Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.send,
+                                            color: _accentColor,
+                                            size: 26,
+                                          ),
+                                          tooltip: 'Transfer Product',
+                                          onPressed: () =>
+                                              _showTransferProductModal(
+                                                context,
+                                                product,
+                                              ),
                                         ),
-                                        tooltip: "Download Barcode",
-                                        onPressed: () => _saveBarcodePNG(
-                                          context,
-                                          barcodeKey,
-                                          product.batchId,
+                                        const SizedBox(height: 10),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.info_outline,
+                                            size: 26,
+                                            color: Colors.white70,
+                                          ),
+                                          tooltip: 'View Details',
+                                          onPressed: () =>
+                                              _showProductDetailsDialog(
+                                                context,
+                                                product,
+                                              ),
                                         ),
-                                      ),
+                                      ],
                                     ),
                                   ],
                                 ),
                               ),
-                              Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.send,
-                                      color: _accentColor,
-                                      size: 26,
-                                    ),
-                                    tooltip: 'Transfer Product',
-                                    onPressed: () =>
-                                        _showTransferProductModal(
-                                          context,
-                                          product,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.info_outline,
-                                      size: 26,
-                                      color: Colors.white70,
-                                    ),
-                                    tooltip: 'View Details',
-                                    onPressed: () =>
-                                        _showProductDetailsDialog(
-                                          context,
-                                          product,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
                 ),
               ],
             );
