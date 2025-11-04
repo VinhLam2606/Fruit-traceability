@@ -308,7 +308,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     return txHash;
   }
 
-  // In auth_bloc.dart
+  // EMAIL CHECK
   Future<void> _onEmailVerificationChecked(
     AuthEmailVerificationChecked event,
     Emitter<AuthState> emit,
