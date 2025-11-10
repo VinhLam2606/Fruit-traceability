@@ -24,11 +24,9 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   late ContractFunction _isRegisteredFunction;
   late ContractFunction _getUserFunction;
 
-  // Ánh xạ hàm chuyển giao và tra cứu Owner
   late ContractFunction _transferProductFunction;
   late ContractFunction _getOrganizationOwnerFunction;
 
-  // 💡 Biến nội bộ để lưu danh sách sản phẩm hiện tại
   List<Product> _currentProducts = [];
 
   DashboardBloc({required this.web3client, required this.credentials})
@@ -43,7 +41,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     DashboardInitialFetchEvent event,
     Emitter<DashboardState> emit,
   ) async {
-    // 💡 Sửa đổi ở đây: Vẫn loading ban đầu
     emit(DashboardLoadingState());
     try {
       final address = credentials.address;
@@ -96,11 +93,10 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       add(FetchProductsEvent());
     } catch (e, st) {
       developer.log("❌ [Init] DashboardBloc error", error: e, stackTrace: st);
-      // 💡 Lỗi init thì danh sách là rỗng
       emit(
         DashboardErrorState(
           "Lỗi khởi tạo: ${e.toString()}",
-          products: _currentProducts, // (vẫn rỗng)
+          products: _currentProducts,
         ),
       );
     }
@@ -150,7 +146,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     CreateProductButtonPressedEvent event,
     Emitter<DashboardState> emit,
   ) async {
-    // 💡 Truyền danh sách HIỆN TẠI vào state loading
     emit(DashboardLoadingState(products: _currentProducts));
     try {
       final txHash = await web3client.sendTransaction(
@@ -169,18 +164,41 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         chainId: 1337,
       );
 
+      developer.log(
+        "⏳ Product submitted. TxHash: $txHash. Waiting for confirmation...",
+      );
+
+      // ✅✅✅ SỬA LỖI NONCE: CHỜ GIAO DỊCH ĐƯỢC XÁC NHẬN ✅✅✅
+      TransactionReceipt? receipt;
+      int attempts = 0;
+      // Chờ tối đa 60 giây
+      while (receipt == null && attempts < 60) {
+        await Future.delayed(const Duration(seconds: 1));
+        try {
+          receipt = await web3client.getTransactionReceipt(txHash);
+        } catch (e) {
+          // Bỏ qua lỗi (ví dụ: "not found")
+        }
+        attempts++;
+      }
+
+      if (receipt == null) {
+        throw Exception("Transaction timed out. Could not get receipt.");
+      }
+      if (receipt.status == false) {
+        throw Exception("Transaction failed (reverted) on-chain.");
+      }
+      // ✅✅✅ KẾT THÚC SỬA LỖI NONCE ✅✅✅
+
       developer.log("✅ Product created! TxHash: $txHash");
-      // 💡 Truyền danh sách HIỆN TẠI vào state success
       emit(
         DashboardSuccessState(
           "✅ Product created! TxHash: $txHash",
           products: _currentProducts,
         ),
       );
-      // Cân nhắc: add(FetchProductsEvent()); để làm mới
     } catch (e, st) {
       developer.log("❌ [CreateProduct] Failed", error: e, stackTrace: st);
-      // 💡 Truyền danh sách HIỆN TẠI vào state error
       emit(
         DashboardErrorState(
           "❌ Failed to create product: $e",
@@ -194,10 +212,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     TransferProductEvent event,
     Emitter<DashboardState> emit,
   ) async {
-    // 💡 Truyền danh sách HIỆN TẠI vào state loading
     emit(DashboardLoadingState(products: _currentProducts));
     try {
-      // 1. Tra cứu địa chỉ ví của chủ sở hữu tổ chức nhận
       final ownerResult = await web3client.call(
         contract: deployedContract,
         function: _getOrganizationOwnerFunction,
@@ -206,21 +222,16 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
       final receiverAddress = ownerResult[0] as EthereumAddress;
 
-      // Kiểm tra địa chỉ có hợp lệ không (address(0) nếu không tìm thấy)
       if (receiverAddress.hex == "0x0000000000000000000000000000000000000000") {
-        // 💡💡💡 ĐÂY LÀ PHẦN SỬA CHÍNH CỦA BẠN 💡💡💡
-        // Emit lỗi, nhưng VẪN kèm theo danh sách sản phẩm hiện tại
         emit(
           DashboardErrorState(
             "Không tìm thấy tổ chức với ID '${event.receiverOrganizationId}'. Vui lòng kiểm tra lại.",
-            products: _currentProducts, // <--- THÊM DÒNG NÀY
+            products: _currentProducts,
           ),
         );
-        // Dừng hàm tại đây
         return;
       }
 
-      // 2. Gửi giao dịch chuyển giao sản phẩm
       final txHash = await web3client.sendTransaction(
         credentials,
         Transaction.callContract(
@@ -231,8 +242,32 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         chainId: 1337,
       );
 
+      developer.log(
+        "⏳ Product transfer submitted. TxHash: $txHash. Waiting...",
+      );
+
+      // ✅ SỬA LỖI NONCE (áp dụng cho cả transfer)
+      TransactionReceipt? receipt;
+      int attempts = 0;
+      while (receipt == null && attempts < 60) {
+        await Future.delayed(const Duration(seconds: 1));
+        try {
+          receipt = await web3client.getTransactionReceipt(txHash);
+        } catch (e) {
+          // Bỏ qua lỗi
+        }
+        attempts++;
+      }
+
+      if (receipt == null) {
+        throw Exception("Transaction timed out.");
+      }
+      if (receipt.status == false) {
+        throw Exception("Transaction failed (reverted) on-chain.");
+      }
+      // ✅ KẾT THÚC SỬA
+
       developer.log("✅ Product transferred! TxHash: $txHash");
-      // 💡 Truyền danh sách HIỆN TẠI vào state success
       emit(
         DashboardSuccessState(
           "✅ Chuyển giao sản phẩm thành công!",
@@ -240,11 +275,9 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         ),
       );
 
-      // Sau khi chuyển giao xong, fetch lại danh sách sản phẩm
       add(FetchProductsEvent());
     } catch (e, st) {
       developer.log("❌ [TransferProduct] Failed", error: e, stackTrace: st);
-      // 💡 Truyền danh sách HIỆN TẠI vào state error
       emit(
         DashboardErrorState(
           "❌ Lỗi khi chuyển giao sản phẩm: $e",
@@ -253,33 +286,30 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       );
     }
   }
-  // ===============================================================
 
   Future<void> createProductDirectly({
     required String batchId,
     required String name,
     required int date,
-    required String seedVariety, // Thêm tham số
-    required String origin, // Thêm tham số
+    required String seedVariety,
+    required String origin,
   }) async {
     add(
       CreateProductButtonPressedEvent(
         batchId: batchId,
         name: name,
         date: date,
-        seedVariety: seedVariety, // Truyền tham số
-        origin: origin, // Truyền tham số
+        seedVariety: seedVariety,
+        origin: origin,
       ),
     );
-
-    await Future.delayed(const Duration(seconds: 10));
+    // Bỏ await để không block
   }
 
   FutureOr<void> _fetchProductsEvent(
     FetchProductsEvent event,
     Emitter<DashboardState> emit,
   ) async {
-    // 💡 Khi fetch, chúng ta emit state loading VỚI danh sách (cũ)
     emit(DashboardLoadingState(products: _currentProducts));
     try {
       final address = credentials.address;
@@ -304,15 +334,12 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         products = [];
       }
 
-      // 💡 Cập nhật biến nội bộ
       _currentProducts = products;
 
       developer.log("✅ Loaded ${products.length} products.");
-      // 💡 Emit state MỚI với danh sách MỚI
       emit(ProductsLoadedState(products));
     } catch (e, st) {
       developer.log("❌ [FetchProducts] Failed", error: e, stackTrace: st);
-      // 💡 Nếu fetch lỗi, emit lỗi VỚI danh sách (cũ) để UI không bị vỡ
       emit(
         DashboardErrorState(
           "❌ Failed to load products: $e",

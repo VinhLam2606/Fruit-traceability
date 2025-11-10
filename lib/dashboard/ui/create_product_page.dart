@@ -87,15 +87,10 @@ class _CreateProductViewState extends State<CreateProductView> {
           listenWhen: (previous, current) => current is! ProductsLoadedState,
           listener: (context, state) {
             if (!mounted) return;
-            if (state is DashboardSuccessState) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(state.message),
-                  backgroundColor: _accentColor,
-                ),
-              );
-              context.read<DashboardBloc>().add(FetchProductsEvent());
-            } else if (state is DashboardErrorState) {
+
+            // ✅ SỬA: Chỉ lắng nghe SnackBar cho lỗi chung,
+            // không phải lỗi khi đang xử lý (vì ta sẽ await nó)
+            if (state is DashboardErrorState && !_isProcessing) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(state.error),
@@ -103,12 +98,17 @@ class _CreateProductViewState extends State<CreateProductView> {
                 ),
               );
             }
+            // ✅ SỬA: Chỉ refresh list khi tạo xong (success) và không
+            // còn đang xử lý (tránh gọi 2 lần)
+            else if (state is DashboardSuccessState && !_isProcessing) {
+              context.read<DashboardBloc>().add(FetchProductsEvent());
+            }
           },
           builder: (context, state) {
             final isLoading =
                 _isProcessing ||
-                (state is DashboardLoadingState &&
-                    state is! ProductsLoadedState);
+                    (state is DashboardLoadingState &&
+                        state is! ProductsLoadedState);
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -231,9 +231,16 @@ class _CreateProductViewState extends State<CreateProductView> {
       _createdProducts.clear();
     });
 
+    // ✅✅✅ SỬA LỖI UI: LẤY BLOC RA NGOÀI ✅✅✅
+    final bloc = context.read<DashboardBloc>();
+    bool stoppedDueToError = false;
+
     try {
       for (int i = 1; i <= quantity; i++) {
-        if (!mounted) return;
+        if (!mounted) {
+          stoppedDueToError = true; // Dừng nếu widget bị huỷ
+          break;
+        }
 
         final generatedBatchId = _generateBatchId();
         final name = quantity > 1 ? "$baseName #$i" : baseName;
@@ -253,7 +260,8 @@ class _CreateProductViewState extends State<CreateProductView> {
 
         _createdProducts.add(product);
 
-        context.read<DashboardBloc>().add(
+        // 1. Gửi sự kiện
+        bloc.add(
           CreateProductButtonPressedEvent(
             batchId: generatedBatchId,
             name: name,
@@ -262,10 +270,28 @@ class _CreateProductViewState extends State<CreateProductView> {
             origin: origin,
           ),
         );
+
+        // ✅✅✅ SỬA LỖI UI: CHỜ BLOC PHẢN HỒI (SUCCESS/ERROR) ✅✅✅
+        // (BLoC bây giờ cũng đang chờ blockchain, nên việc này là an toàn)
+        final stateAfterCreate = await bloc.stream.firstWhere(
+                (state) => state is DashboardSuccessState || state is DashboardErrorState);
+
+        // 3. Nếu BLoC trả về lỗi, dừng vòng lặp
+        if (stateAfterCreate is DashboardErrorState) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Lỗi khi tạo sản phẩm #$i: ${stateAfterCreate.error}. Dừng lại."),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+          stoppedDueToError = true;
+          break; // Thoát khỏi vòng lặp
+        }
       }
 
       if (!mounted) return;
-      if (generatePdf) {
+      if (generatePdf && !stoppedDueToError) {
         await _generateQrPdf(_createdProducts);
       }
 
@@ -274,10 +300,13 @@ class _CreateProductViewState extends State<CreateProductView> {
       seedVarietyController.clear();
       originController.clear();
       quantityController.text = '1';
+
     } finally {
       if (mounted) {
         _hideLoadingDialog();
         setState(() => _isProcessing = false);
+        // Sau khi tất cả đã xong, gọi fetch 1 lần
+        context.read<DashboardBloc>().add(FetchProductsEvent());
       }
     }
   }
@@ -398,13 +427,11 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 
   Widget _buildProductList(
-    BuildContext context,
-    DashboardState state,
-    bool isLoading,
-  ) {
-    final products = state is ProductsLoadedState
-        ? state.products.reversed.toList()
-        : <Product>[];
+      BuildContext context,
+      DashboardState state,
+      bool isLoading,
+      ) {
+    final products = state.products.reversed.toList();
 
     return Expanded(
       child: Column(
@@ -426,8 +453,8 @@ class _CreateProductViewState extends State<CreateProductView> {
                 onPressed: isLoading
                     ? null
                     : () {
-                        context.read<DashboardBloc>().add(FetchProductsEvent());
-                      },
+                  context.read<DashboardBloc>().add(FetchProductsEvent());
+                },
               ),
             ],
           ),
