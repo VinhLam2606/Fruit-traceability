@@ -1,20 +1,19 @@
+// lib/dashboard/bloc/dashboard_event.dart
 part of 'dashboard_bloc.dart';
 
 sealed class DashboardEvent {}
 
-// Event để khởi tạo kết nối với blockchain
 class DashboardInitialFetchEvent extends DashboardEvent {}
 
-// Event để tải danh sách sản phẩm
 class FetchProductsEvent extends DashboardEvent {}
 
-// Event được kích hoạt khi người dùng nhấn nút tạo sản phẩm
 class CreateProductButtonPressedEvent extends DashboardEvent {
   final String batchId;
   final String name;
   final int date;
   final String seedVariety;
   final String origin;
+  final Completer<bool>? completer; // ✅ THÊM DÒNG NÀY
 
   CreateProductButtonPressedEvent({
     required this.batchId,
@@ -22,19 +21,23 @@ class CreateProductButtonPressedEvent extends DashboardEvent {
     required this.date,
     required this.seedVariety,
     required this.origin,
+    this.completer, // ✅ THÊM DÒNG NÀY
   });
 }
 
 class TransferProductEvent extends DashboardEvent {
   final String batchId;
-  final String receiverOrganizationId; // Tên/ID tổ chức nhận
+  final String receiverOrganizationId;
+  final Completer<bool>? completer; // ✅ THÊM DÒNG NÀY
 
   TransferProductEvent({
     required this.batchId,
     required this.receiverOrganizationId,
+    this.completer, // ✅ THÊM DÒNG NÀY
   });
 }
 
+// (Event dưới đây giữ nguyên)
 class RegisterOrgAndCreateProductEvent extends DashboardEvent {
   final String orgName;
   final String batchId;

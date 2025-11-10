@@ -1,4 +1,5 @@
 // product_management.dart
+import 'dart:async'; // ✅ Đã import
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -31,6 +32,8 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
   final Set<String> _selectedBatchIds = {};
   bool _selectAll = false;
 
+  bool _isTransferring = false; // Biến state loading cho transfer
+
   String _formatTimestamp(BigInt timestamp) {
     if (timestamp == BigInt.zero) return "N/A";
     final dateTime = DateTime.fromMillisecondsSinceEpoch(
@@ -53,11 +56,87 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     );
   }
 
+  // Hàm `async` xử lý logic transfer
+  Future<void> _transferProducts(
+    BuildContext context, // (Đây là context của trang)
+    List<String> batchIds,
+    String receiverId,
+  ) async {
+    if (!mounted) return;
+
+    // Lấy BLoC 1 lần (từ context của trang)
+    final bloc = context.read<DashboardBloc>();
+
+    // Đóng dialog (dùng context của trang)
+    Navigator.of(context, rootNavigator: true).pop();
+
+    // Set state loading
+    setState(() {
+      _isTransferring = true;
+    });
+
+    String? firstError;
+
+    try {
+      for (final batchId in batchIds) {
+        if (!mounted) break;
+        final completer = Completer<bool>();
+        bloc.add(
+          TransferProductEvent(
+            batchId: batchId,
+            receiverOrganizationId: receiverId,
+            completer: completer,
+          ),
+        );
+        final bool success = await completer.future;
+        if (!success) {
+          if (bloc.state is DashboardErrorState) {
+            firstError = (bloc.state as DashboardErrorState).error;
+          }
+          break;
+        }
+
+        // ✅ Add delay to avoid nonce collision
+        await Future.delayed(const Duration(seconds: 3));
+      }
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        _isTransferring = false;
+        _selectedBatchIds.clear();
+        _selectAll = false;
+      });
+
+      // Hiển thị thông báo
+      if (firstError != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Lỗi: $firstError. Đã dừng chuyển giao."),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("✅ Đã chuyển giao ${batchIds.length} sản phẩm."),
+            backgroundColor: _accentColor,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      // BLoC đã tự fetch lại list
+    }
+  }
+
+  // Hàm chỉ hiển thị dialog
   void _showTransferProductModal(BuildContext context, List<String> batchIds) {
     final TextEditingController receiverIdController = TextEditingController();
+
     showDialog(
-      context: context,
+      context: context, // (1) Dùng context trang
       builder: (ctx) {
+        // (2) ctx là context dialog
         return AlertDialog(
           backgroundColor: const Color(0xFF243B55),
           shape: RoundedRectangleBorder(
@@ -111,25 +190,9 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
               onPressed: () {
                 final receiverId = receiverIdController.text;
                 if (receiverId.isNotEmpty) {
-                  for (final batchId in batchIds) {
-                    context.read<DashboardBloc>().add(
-                      TransferProductEvent(
-                        batchId: batchId,
-                        receiverOrganizationId: receiverId,
-                      ),
-                    );
-                  }
-
-                  // ✅ SỬA 1: Thêm `if (mounted)` check trước `setState`
-                  // Vì `ProductManagementPage` có thể bị dispose
-                  // trong khi dialog này đang mở.
-                  if (mounted) {
-                    setState(() {
-                      _selectedBatchIds.clear();
-                      _selectAll = false;
-                    });
-                  }
-                  Navigator.of(ctx).pop();
+                  // ✅✅✅ SỬA LỖI Ở ĐÂY ✅✅✅
+                  // Phải truyền `context` (của trang), KHÔNG PHẢI `ctx` (của dialog)
+                  _transferProducts(context, batchIds, receiverId);
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -149,19 +212,16 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     GlobalKey repaintKey,
     String batchId,
   ) async {
-    // ✅ SỬA 2: Lưu `ScaffoldMessenger` TRƯỚC khi `await`
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     try {
       if (Platform.isAndroid) {
-        // `await` có thể làm widget bị dispose
         final permissions = await [
           Permission.storage,
           Permission.photos,
           Permission.mediaLibrary,
         ].request();
 
-        // ✅ SỬA 3: Thêm `if (!mounted)` check sau khi `await`
         if (!mounted) return;
         if (permissions.values.every((status) => !status.isGranted)) {
           scaffoldMessenger.showSnackBar(
@@ -176,10 +236,14 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
       final boundary =
           repaintKey.currentContext!.findRenderObject()
               as RenderRepaintBoundary;
-      // ...nhiều lệnh `await`...
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      final pngBytes = byteData!.buffer.asUint8List();
+
+      if (byteData == null) {
+        throw Exception("Could not get byte data from image");
+      }
+
+      final pngBytes = byteData.buffer.asUint8List();
 
       Directory? directory;
       if (Platform.isAndroid) {
@@ -192,7 +256,6 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
       }
 
       if (directory == null) {
-        // Handle error case
         if (!mounted) return;
         scaffoldMessenger.showSnackBar(
           const SnackBar(content: Text('❌ Could not find save directory.')),
@@ -202,9 +265,8 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
 
       final filePath = '${directory.path}/barcode_$batchId.png';
       final file = File(filePath);
-      await file.writeAsBytes(pngBytes); // `await` cuối cùng
+      await file.writeAsBytes(pngBytes);
 
-      // ✅ SỬA 4: Thêm `if (!mounted)` check sau khi `await`
       if (!mounted) return;
       scaffoldMessenger.showSnackBar(
         SnackBar(
@@ -214,7 +276,6 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
         ),
       );
     } catch (e) {
-      // ✅ SỬA 5: Thêm `if (!mounted)` check trong `catch`
       if (!mounted) return;
       scaffoldMessenger.showSnackBar(
         SnackBar(content: Text('❌ Error saving barcode: $e')),
@@ -300,30 +361,34 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
           actions: [
             IconButton(
               icon: const Icon(Icons.refresh, color: _accentColor),
-              onPressed: () =>
-                  context.read<DashboardBloc>().add(FetchProductsEvent()),
+              onPressed: _isTransferring
+                  ? null
+                  : () => // Vô hiệu hoá khi transfer
+                        context.read<DashboardBloc>().add(FetchProductsEvent()),
             ),
           ],
         ),
         body: BlocConsumer<DashboardBloc, DashboardState>(
           listener: (context, state) {
-            // ✅ DÒNG NÀY BẠN ĐÃ THÊM ĐÚNG!
             if (!mounted) return;
 
+            // Chỉ lắng nghe lỗi/success KHÔNG liên quan đến transfer
             if (state is DashboardSuccessState &&
-                !state.message.contains("Product created")) {
+                !state.message.contains("Product created") &&
+                !_isTransferring) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(state.message),
                   backgroundColor: _accentColor,
                 ),
               );
-            } else if (state is DashboardErrorState) {
+            } else if (state is DashboardErrorState && !_isTransferring) {
               final bool isInitError =
                   state.error.contains("Lỗi khởi tạo") ||
                   state.error.contains("Failed to load products");
 
-              if (!state.error.contains("create product")) {
+              if (!state.error.contains("create product") &&
+                  !state.error.contains("chuyển giao")) {
                 _showErrorDialog(
                   context,
                   state.error,
@@ -336,7 +401,16 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
             final products = state.products;
             products.sort((a, b) => b.date.compareTo(a.date));
 
-            if (state is DashboardLoadingState && products.isEmpty) {
+            final bool isPageLoading =
+                (state is DashboardLoadingState &&
+                products.isEmpty &&
+                !_isTransferring);
+
+            final bool isProcessing =
+                (state is DashboardLoadingState && products.isNotEmpty) ||
+                _isTransferring;
+
+            if (isPageLoading) {
               return const Center(
                 child: CircularProgressIndicator(color: _accentColor),
               );
@@ -344,12 +418,15 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
 
             return Column(
               children: [
-                if (state is DashboardLoadingState && products.isNotEmpty)
+                if (isProcessing) // Hiển thị thanh loading
                   const LinearProgressIndicator(color: _accentColor),
+
                 Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: ElevatedButton.icon(
-                    onPressed: () => _showCreateProductModal(context),
+                    onPressed: isProcessing
+                        ? null
+                        : () => _showCreateProductModal(context),
                     icon: const Icon(
                       Icons.add_box_rounded,
                       color: Colors.black,
@@ -379,18 +456,20 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                         Checkbox(
                           value: _selectAll,
                           activeColor: _accentColor,
-                          onChanged: (val) {
-                            setState(() {
-                              _selectAll = val ?? false;
-                              if (_selectAll) {
-                                _selectedBatchIds.addAll(
-                                  products.map((e) => e.batchId),
-                                );
-                              } else {
-                                _selectedBatchIds.clear();
-                              }
-                            });
-                          },
+                          onChanged: isProcessing
+                              ? null
+                              : (val) {
+                                  setState(() {
+                                    _selectAll = val ?? false;
+                                    if (_selectAll) {
+                                      _selectedBatchIds.addAll(
+                                        products.map((e) => e.batchId),
+                                      );
+                                    } else {
+                                      _selectedBatchIds.clear();
+                                    }
+                                  });
+                                },
                         ),
                         const Text(
                           "Select All",
@@ -399,10 +478,12 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                         const Spacer(),
                         if (_selectedBatchIds.isNotEmpty)
                           ElevatedButton.icon(
-                            onPressed: () => _showTransferProductModal(
-                              context,
-                              _selectedBatchIds.toList(),
-                            ),
+                            onPressed: isProcessing
+                                ? null
+                                : () => _showTransferProductModal(
+                                    context,
+                                    _selectedBatchIds.toList(),
+                                  ),
                             icon: const Icon(Icons.send),
                             label: Text(
                               "Transfer Selected (${_selectedBatchIds.length})",
@@ -410,6 +491,9 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _accentColor,
                               foregroundColor: Colors.black,
+                              disabledBackgroundColor: Colors.grey.withOpacity(
+                                0.5,
+                              ),
                             ),
                           ),
                       ],
@@ -455,20 +539,23 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                                     Checkbox(
                                       value: isSelected,
                                       activeColor: _accentColor,
-                                      onChanged: (val) {
-                                        setState(() {
-                                          if (val == true) {
-                                            _selectedBatchIds.add(
-                                              product.batchId,
-                                            );
-                                          } else {
-                                            _selectedBatchIds.remove(
-                                              product.batchId,
-                                            );
-                                            _selectAll = false;
-                                          }
-                                        });
-                                      },
+                                      onChanged: isProcessing
+                                          ? null
+                                          : (val) {
+                                              // Vô hiệu hoá
+                                              setState(() {
+                                                if (val == true) {
+                                                  _selectedBatchIds.add(
+                                                    product.batchId,
+                                                  );
+                                                } else {
+                                                  _selectedBatchIds.remove(
+                                                    product.batchId,
+                                                  );
+                                                  _selectAll = false;
+                                                }
+                                              });
+                                            },
                                     ),
                                     CircleAvatar(
                                       backgroundColor: _accentColor.withOpacity(
@@ -538,11 +625,14 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                                                 color: _accentColor,
                                               ),
                                               tooltip: "Download Barcode",
-                                              onPressed: () => _saveBarcodePNG(
-                                                context,
-                                                barcodeKey,
-                                                product.batchId,
-                                              ),
+                                              onPressed: isProcessing
+                                                  ? null
+                                                  : () => _saveBarcodePNG(
+                                                      // Vô hiệu hoá
+                                                      context,
+                                                      barcodeKey,
+                                                      product.batchId,
+                                                    ),
                                             ),
                                           ),
                                         ],
@@ -558,11 +648,13 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                                             color: Colors.white70,
                                           ),
                                           tooltip: 'View Details',
-                                          onPressed: () =>
-                                              _showProductDetailsDialog(
-                                                context,
-                                                product,
-                                              ),
+                                          onPressed: isProcessing
+                                              ? null
+                                              : () => // Vô hiệu hoá
+                                                _showProductDetailsDialog(
+                                                  context,
+                                                  product,
+                                                ),
                                         ),
                                       ],
                                     ),
@@ -583,7 +675,7 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
 }
 
 // ====================== 💡 WIDGET NÀY GIỮ NGUYÊN ======================
-// (Đã copy từ file của bạn)
+// (Dialog chi tiết sản phẩm)
 
 class ProductDetailsDialog extends StatelessWidget {
   final Product product;

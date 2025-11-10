@@ -45,7 +45,7 @@ DeployedContract? usersContract;
 
 /// Initialize Web3 client and contract
 Future<void> initContract() async {
-  ethClient = Web3Client("http://192.168.102.5:7545", http.Client());
+  ethClient = Web3Client("http://10.248.229.189:7545", http.Client());
   try {
     final abiJson = jsonDecode(
       await rootBundle.loadString("build/contracts/Chain.json"),

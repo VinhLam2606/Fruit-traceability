@@ -36,7 +36,7 @@ class OrgUserPage extends StatelessWidget {
     }
 
     // Tạo web3 client & credentials
-    final rpcUrl = "http://192.168.102.5:7545";
+    final rpcUrl = "http://10.248.229.189:7545";
     final client = Web3Client(rpcUrl, Client());
     final creds = EthPrivateKey.fromHex(service.decryptedPrivateKey!);
 

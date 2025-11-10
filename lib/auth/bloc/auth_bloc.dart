@@ -25,7 +25,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   static String providedAddress = "";
 
   AuthBloc(this._authService) : super(AuthInitial()) {
-    ethClient = Web3Client("http://192.168.102.5:7545", http.Client());
+    ethClient = Web3Client("http://10.248.229.189:7545", http.Client());
     _loadContract();
 
     on<AuthStarted>(_onAuthStarted);
@@ -36,9 +36,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthForgotPasswordRequested>(_onForgotPasswordRequested);
   }
 
-  // ---------------------------------------------------------
-  // AUTH STARTUP
-  // ---------------------------------------------------------
   Future<void> _onAuthStarted(
     AuthStarted event,
     Emitter<AuthState> emit,
@@ -46,9 +43,32 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthInitial());
   }
 
-  // ---------------------------------------------------------
-  // LOGIN
-  // ---------------------------------------------------------
+  Future<void> _initGanacheAccount() async {
+    const mnemonic =
+        "hollow strong unable tackle current actual table decide six good dinner acid";
+
+    final ganacheAccounts = await _getGanacheAccounts();
+    if (ganacheAccounts.isEmpty) throw Exception("No Ganache accounts found.");
+
+    for (int i = 0; i < 10; i++) {
+      final derivedKey = _derivePrivateKeyFromMnemonic(mnemonic, i);
+      final credentials = EthPrivateKey.fromHex(derivedKey);
+      final address = await credentials.extractAddress();
+
+      final balance = await ethClient.getBalance(address);
+      if (balance.getInEther == BigInt.zero) continue;
+
+      final alreadyRegistered = await _isUserAlreadyRegistered(address);
+      if (!alreadyRegistered) {
+        providedPrivateKey = derivedKey;
+        providedAddress = address.hex;
+        print("🟢 Selected funded account #$i: $providedAddress");
+        return;
+      }
+    }
+    throw Exception("No funded & unregistered Ganache accounts available!");
+  }
+
   Future<void> _onLoginRequested(
     AuthLoginRequested event,
     Emitter<AuthState> emit,
@@ -61,7 +81,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         password: event.password,
       );
 
-      // kiểm tra xác thực email
       await userCred.user?.reload();
       if (!(userCred.user?.emailVerified ?? false)) {
         emit(AuthFailure("Email not verified. Please check your inbox."));
@@ -283,35 +302,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  Future<void> _initGanacheAccount() async {
-    const mnemonic =
-        "ecology minimum unusual wall spatial lyrics gaze bundle waste aunt scissors sausage";
-
-    final ganacheAccounts = await _getGanacheAccounts();
-    if (ganacheAccounts.isEmpty) throw Exception("No Ganache accounts found.");
-
-    for (int i = 0; i < 10; i++) {
-      final derivedKey = _derivePrivateKeyFromMnemonic(mnemonic, i);
-      final credentials = EthPrivateKey.fromHex(derivedKey);
-      final address = await credentials.extractAddress();
-
-      final balance = await ethClient.getBalance(address);
-      if (balance.getInEther == BigInt.zero) continue;
-
-      final alreadyRegistered = await _isUserAlreadyRegistered(address);
-      if (!alreadyRegistered) {
-        providedPrivateKey = derivedKey;
-        providedAddress = address.hex;
-        print("🟢 Selected funded account #$i: $providedAddress");
-        return;
-      }
-    }
-    throw Exception("No funded & unregistered Ganache accounts available!");
-  }
-
   Future<List<String>> _getGanacheAccounts() async {
     final res = await http.post(
-      Uri.parse("http://192.168.102.5:7545"),
+      Uri.parse("http://10.248.229.189:7545"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         "jsonrpc": "2.0",
