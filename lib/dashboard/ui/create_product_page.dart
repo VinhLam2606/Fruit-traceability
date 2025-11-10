@@ -84,13 +84,23 @@ class _CreateProductViewState extends State<CreateProductView> {
           iconTheme: const IconThemeData(color: Colors.white),
         ),
         body: BlocConsumer<DashboardBloc, DashboardState>(
-          listenWhen: (previous, current) => current is! ProductsLoadedState,
+          // ✅ SỬA: Không lắng nghe loading state
+          listenWhen: (previous, current) =>
+              current is! ProductsLoadedState &&
+              current is! DashboardLoadingState,
           listener: (context, state) {
             if (!mounted) return;
 
-            // ✅ SỬA: Chỉ lắng nghe SnackBar cho lỗi chung,
-            // không phải lỗi khi đang xử lý (vì ta sẽ await nó)
-            if (state is DashboardErrorState && !_isProcessing) {
+            // ✅ SỬA: Chỉ xử lý lỗi/success KHÔNG liên quan đến processing
+            if (state is DashboardSuccessState && !_isProcessing) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(state.message),
+                  backgroundColor: _accentColor,
+                ),
+              );
+              context.read<DashboardBloc>().add(FetchProductsEvent());
+            } else if (state is DashboardErrorState && !_isProcessing) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(state.error),
@@ -98,17 +108,17 @@ class _CreateProductViewState extends State<CreateProductView> {
                 ),
               );
             }
-            // ✅ SỬA: Chỉ refresh list khi tạo xong (success) và không
-            // còn đang xử lý (tránh gọi 2 lần)
-            else if (state is DashboardSuccessState && !_isProcessing) {
-              context.read<DashboardBloc>().add(FetchProductsEvent());
-            }
           },
           builder: (context, state) {
-            final isLoading =
-                _isProcessing ||
-                    (state is DashboardLoadingState &&
-                        state is! ProductsLoadedState);
+            // ✅ SỬA: Chỉ dựa vào state của UI
+            final isLoading = _isProcessing;
+
+            // ✅ SỬA: Luôn hiển thị list sản phẩm từ state,
+            // không quan tâm _isProcessing
+            final displayLoading =
+                (state is DashboardLoadingState &&
+                state.products.isEmpty &&
+                !_isProcessing);
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -117,7 +127,7 @@ class _CreateProductViewState extends State<CreateProductView> {
                   _buildCreateProductForm(isLoading),
                   const SizedBox(height: 24),
                   const Divider(color: Colors.white30),
-                  _buildProductList(context, state, isLoading),
+                  _buildProductList(context, state, displayLoading),
                 ],
               ),
             );
@@ -231,14 +241,16 @@ class _CreateProductViewState extends State<CreateProductView> {
       _createdProducts.clear();
     });
 
-    // ✅✅✅ SỬA LỖI UI: LẤY BLOC RA NGOÀI ✅✅✅
+    // ✅ SỬA: Lấy BLoC ra ngoài
     final bloc = context.read<DashboardBloc>();
     bool stoppedDueToError = false;
+    String firstError = "";
 
     try {
       for (int i = 1; i <= quantity; i++) {
+        // Kiểm tra mounted mỗi vòng lặp
         if (!mounted) {
-          stoppedDueToError = true; // Dừng nếu widget bị huỷ
+          stoppedDueToError = true;
           break;
         }
 
@@ -260,7 +272,8 @@ class _CreateProductViewState extends State<CreateProductView> {
 
         _createdProducts.add(product);
 
-        // 1. Gửi sự kiện
+        // ✅ SỬA: Dùng Completer để chờ BLoC
+        final completer = Completer<bool>();
         bloc.add(
           CreateProductButtonPressedEvent(
             batchId: generatedBatchId,
@@ -268,29 +281,36 @@ class _CreateProductViewState extends State<CreateProductView> {
             date: currentTimestamp,
             seedVariety: seedVariety,
             origin: origin,
+            completer: completer, // Gửi completer
           ),
         );
 
-        // ✅✅✅ SỬA LỖI UI: CHỜ BLOC PHẢN HỒI (SUCCESS/ERROR) ✅✅✅
-        // (BLoC bây giờ cũng đang chờ blockchain, nên việc này là an toàn)
-        final stateAfterCreate = await bloc.stream.firstWhere(
-                (state) => state is DashboardSuccessState || state is DashboardErrorState);
+        // Chờ BLoC xử lý xong (true = success, false = error)
+        final bool success = await completer.future;
 
-        // 3. Nếu BLoC trả về lỗi, dừng vòng lặp
-        if (stateAfterCreate is DashboardErrorState) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Lỗi khi tạo sản phẩm #$i: ${stateAfterCreate.error}. Dừng lại."),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
+        if (!success) {
+          // Lấy lỗi từ state của BLoC
+          if (bloc.state is DashboardErrorState) {
+            firstError = (bloc.state as DashboardErrorState).error;
+          }
           stoppedDueToError = true;
-          break; // Thoát khỏi vòng lặp
+          break; // Dừng vòng lặp nếu có lỗi
         }
       }
 
       if (!mounted) return;
+
+      // Hiển thị lỗi (nếu có)
+      if (stoppedDueToError) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Đã xảy ra lỗi: $firstError. Đã dừng tạo."),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+
+      // In PDF nếu không có lỗi
       if (generatePdf && !stoppedDueToError) {
         await _generateQrPdf(_createdProducts);
       }
@@ -300,12 +320,11 @@ class _CreateProductViewState extends State<CreateProductView> {
       seedVarietyController.clear();
       originController.clear();
       quantityController.text = '1';
-
     } finally {
       if (mounted) {
         _hideLoadingDialog();
         setState(() => _isProcessing = false);
-        // Sau khi tất cả đã xong, gọi fetch 1 lần
+        // Luôn fetch lại danh sách sau khi kết thúc
         context.read<DashboardBloc>().add(FetchProductsEvent());
       }
     }
@@ -427,10 +446,11 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 
   Widget _buildProductList(
-      BuildContext context,
-      DashboardState state,
-      bool isLoading,
-      ) {
+    BuildContext context,
+    DashboardState state,
+    bool isLoading,
+  ) {
+    // ✅ SỬA: Luôn lấy list từ state
     final products = state.products.reversed.toList();
 
     return Expanded(
@@ -453,13 +473,13 @@ class _CreateProductViewState extends State<CreateProductView> {
                 onPressed: isLoading
                     ? null
                     : () {
-                  context.read<DashboardBloc>().add(FetchProductsEvent());
-                },
+                        context.read<DashboardBloc>().add(FetchProductsEvent());
+                      },
               ),
             ],
           ),
           const SizedBox(height: 16),
-          if (isLoading && products.isEmpty)
+          if (isLoading) // Chỉ hiển thị loading nếu state là loading
             const Expanded(
               child: Center(
                 child: CircularProgressIndicator(color: _accentColor),
@@ -530,6 +550,7 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 }
 
+// --- ProductDetailsDialog (KHÔNG ĐỔI) ---
 class ProductDetailsDialog extends StatelessWidget {
   final Product product;
   const ProductDetailsDialog({super.key, required this.product});
@@ -612,6 +633,7 @@ class ProductDetailsDialog extends StatelessWidget {
   }
 }
 
+// --- CustomLoadingDialog (KHÔNG ĐỔI) ---
 class CustomLoadingDialog extends StatelessWidget {
   const CustomLoadingDialog({super.key});
   @override

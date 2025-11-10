@@ -37,6 +37,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     on<TransferProductEvent>(_transferProductEvent);
   }
 
+  // --- HÀM KHỞI TẠO (KHÔNG ĐỔI) ---
   FutureOr<void> _dashboardInitialFetchEvent(
     DashboardInitialFetchEvent event,
     Emitter<DashboardState> emit,
@@ -141,6 +142,45 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
     developer.log("✅ User là Manufacturer và thuộc Organization → OK");
   }
+  // --- KẾT THÚC HÀM KHỞI TẠO ---
+
+  // ✅ HÀM HELPER MỚI: Gửi và chờ xác nhận
+  Future<TransactionReceipt> _sendAndWaitForReceipt(
+    Transaction transaction,
+  ) async {
+    final txHash = await web3client.sendTransaction(
+      credentials,
+      transaction,
+      chainId: 1337,
+    );
+
+    developer.log(
+      "⏳ Transaction submitted. TxHash: $txHash. Waiting for confirmation...",
+    );
+
+    TransactionReceipt? receipt;
+    int attempts = 0;
+    // Chờ tối đa 60 giây
+    while (receipt == null && attempts < 60) {
+      await Future.delayed(const Duration(seconds: 1));
+      try {
+        receipt = await web3client.getTransactionReceipt(txHash);
+      } catch (e) {
+        // Bỏ qua lỗi (ví dụ: "not found" khi giao dịch chưa được mined)
+      }
+      attempts++;
+    }
+
+    if (receipt == null) {
+      throw Exception("Transaction timed out. Could not get receipt.");
+    }
+
+    if (receipt.status == false) {
+      throw Exception("Transaction failed (reverted) on-chain.");
+    }
+
+    return receipt;
+  }
 
   FutureOr<void> _createProductButtonPressedEvent(
     CreateProductButtonPressedEvent event,
@@ -148,55 +188,28 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   ) async {
     emit(DashboardLoadingState(products: _currentProducts));
     try {
-      final txHash = await web3client.sendTransaction(
-        credentials,
-        Transaction.callContract(
-          contract: deployedContract,
-          function: _addProductFunction,
-          parameters: [
-            event.batchId,
-            event.name,
-            BigInt.from(event.date),
-            event.seedVariety,
-            event.origin,
-          ],
-        ),
-        chainId: 1337,
+      final transaction = Transaction.callContract(
+        contract: deployedContract,
+        function: _addProductFunction,
+        parameters: [
+          event.batchId,
+          event.name,
+          BigInt.from(event.date),
+          event.seedVariety,
+          event.origin,
+        ],
       );
 
-      developer.log(
-        "⏳ Product submitted. TxHash: $txHash. Waiting for confirmation...",
-      );
+      // ✅ SỬA: Chờ giao dịch được xác nhận (Fix Nonce)
+      final receipt = await _sendAndWaitForReceipt(transaction);
 
-      // ✅✅✅ SỬA LỖI NONCE: CHỜ GIAO DỊCH ĐƯỢC XÁC NHẬN ✅✅✅
-      TransactionReceipt? receipt;
-      int attempts = 0;
-      // Chờ tối đa 60 giây
-      while (receipt == null && attempts < 60) {
-        await Future.delayed(const Duration(seconds: 1));
-        try {
-          receipt = await web3client.getTransactionReceipt(txHash);
-        } catch (e) {
-          // Bỏ qua lỗi (ví dụ: "not found")
-        }
-        attempts++;
-      }
-
-      if (receipt == null) {
-        throw Exception("Transaction timed out. Could not get receipt.");
-      }
-      if (receipt.status == false) {
-        throw Exception("Transaction failed (reverted) on-chain.");
-      }
-      // ✅✅✅ KẾT THÚC SỬA LỖI NONCE ✅✅✅
-
-      developer.log("✅ Product created! TxHash: $txHash");
+      developer.log("✅ Product created! TxHash: ${receipt.transactionHash}");
       emit(
-        DashboardSuccessState(
-          "✅ Product created! TxHash: $txHash",
-          products: _currentProducts,
-        ),
+        DashboardSuccessState("✅ Product created!", products: _currentProducts),
       );
+
+      // ✅ SỬA: Báo cho UI biết là đã xong
+      event.completer?.complete(true);
     } catch (e, st) {
       developer.log("❌ [CreateProduct] Failed", error: e, stackTrace: st);
       emit(
@@ -205,6 +218,9 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           products: _currentProducts,
         ),
       );
+
+      // ✅ SỬA: Báo cho UI biết là đã lỗi
+      event.completer?.complete(false);
     }
   }
 
@@ -223,57 +239,32 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final receiverAddress = ownerResult[0] as EthereumAddress;
 
       if (receiverAddress.hex == "0x0000000000000000000000000000000000000000") {
-        emit(
-          DashboardErrorState(
-            "Không tìm thấy tổ chức với ID '${event.receiverOrganizationId}'. Vui lòng kiểm tra lại.",
-            products: _currentProducts,
-          ),
+        throw Exception(
+          "Không tìm thấy tổ chức với ID '${event.receiverOrganizationId}'.",
         );
-        return;
       }
 
-      final txHash = await web3client.sendTransaction(
-        credentials,
-        Transaction.callContract(
-          contract: deployedContract,
-          function: _transferProductFunction,
-          parameters: [event.batchId, receiverAddress],
-        ),
-        chainId: 1337,
+      final transaction = Transaction.callContract(
+        contract: deployedContract,
+        function: _transferProductFunction,
+        parameters: [event.batchId, receiverAddress],
       );
+
+      // ✅ SỬA: Chờ giao dịch được xác nhận (Fix Nonce)
+      final receipt = await _sendAndWaitForReceipt(transaction);
 
       developer.log(
-        "⏳ Product transfer submitted. TxHash: $txHash. Waiting...",
+        "✅ Product transferred! TxHash: ${receipt.transactionHash}",
       );
-
-      // ✅ SỬA LỖI NONCE (áp dụng cho cả transfer)
-      TransactionReceipt? receipt;
-      int attempts = 0;
-      while (receipt == null && attempts < 60) {
-        await Future.delayed(const Duration(seconds: 1));
-        try {
-          receipt = await web3client.getTransactionReceipt(txHash);
-        } catch (e) {
-          // Bỏ qua lỗi
-        }
-        attempts++;
-      }
-
-      if (receipt == null) {
-        throw Exception("Transaction timed out.");
-      }
-      if (receipt.status == false) {
-        throw Exception("Transaction failed (reverted) on-chain.");
-      }
-      // ✅ KẾT THÚC SỬA
-
-      developer.log("✅ Product transferred! TxHash: $txHash");
       emit(
         DashboardSuccessState(
           "✅ Chuyển giao sản phẩm thành công!",
           products: _currentProducts,
         ),
       );
+
+      // ✅ SỬA: Báo cho UI biết là đã xong
+      event.completer?.complete(true);
 
       add(FetchProductsEvent());
     } catch (e, st) {
@@ -284,28 +275,12 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           products: _currentProducts,
         ),
       );
+      // ✅ SỬA: Báo cho UI biết là đã lỗi
+      event.completer?.complete(false);
     }
   }
 
-  Future<void> createProductDirectly({
-    required String batchId,
-    required String name,
-    required int date,
-    required String seedVariety,
-    required String origin,
-  }) async {
-    add(
-      CreateProductButtonPressedEvent(
-        batchId: batchId,
-        name: name,
-        date: date,
-        seedVariety: seedVariety,
-        origin: origin,
-      ),
-    );
-    // Bỏ await để không block
-  }
-
+  // --- HÀM FETCH (KHÔNG ĐỔI) ---
   FutureOr<void> _fetchProductsEvent(
     FetchProductsEvent event,
     Emitter<DashboardState> emit,
