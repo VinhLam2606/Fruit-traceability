@@ -1,5 +1,5 @@
 // product_management.dart
-import 'dart:async'; // ✅ THÊM IMPORT NÀY
+import 'dart:async'; // ✅ Đã import
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -32,8 +32,7 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
   final Set<String> _selectedBatchIds = {};
   bool _selectAll = false;
 
-  // ✅ THÊM BIẾN STATE LOADING CHO TRANSFER
-  bool _isTransferring = false;
+  bool _isTransferring = false; // Biến state loading cho transfer
 
   String _formatTimestamp(BigInt timestamp) {
     if (timestamp == BigInt.zero) return "N/A";
@@ -57,18 +56,18 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     );
   }
 
-  // ✅ SỬA: Hàm này giờ là `async` và xử lý toàn bộ logic
+  // Hàm `async` xử lý logic transfer
   Future<void> _transferProducts(
-    BuildContext context,
+    BuildContext context, // (Đây là context của trang)
     List<String> batchIds,
     String receiverId,
   ) async {
     if (!mounted) return;
 
-    // Lấy BLoC 1 lần
+    // Lấy BLoC 1 lần (từ context của trang)
     final bloc = context.read<DashboardBloc>();
 
-    // Đóng dialog
+    // Đóng dialog (dùng context của trang)
     Navigator.of(context, rootNavigator: true).pop();
 
     // Set state loading
@@ -127,18 +126,18 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
           ),
         );
       }
-
-      // BLoC đã tự fetch lại list sau khi transfer thành công
+      // BLoC đã tự fetch lại list
     }
   }
 
-  // ✅ SỬA: Hàm này giờ chỉ hiển thị dialog
+  // Hàm chỉ hiển thị dialog
   void _showTransferProductModal(BuildContext context, List<String> batchIds) {
     final TextEditingController receiverIdController = TextEditingController();
 
     showDialog(
-      context: context,
+      context: context, // (1) Dùng context trang
       builder: (ctx) {
+        // (2) ctx là context dialog
         return AlertDialog(
           backgroundColor: const Color(0xFF243B55),
           shape: RoundedRectangleBorder(
@@ -189,13 +188,12 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
               ),
             ),
             ElevatedButton(
-              // ✅ SỬA: Gọi hàm async `_transferProducts`
               onPressed: () {
                 final receiverId = receiverIdController.text;
                 if (receiverId.isNotEmpty) {
-                  // Gọi hàm async mới, không cần `await`
-                  // Nó sẽ tự đóng dialog và xử lý loading
-                  _transferProducts(ctx, batchIds, receiverId);
+                  // ✅✅✅ SỬA LỖI Ở ĐÂY ✅✅✅
+                  // Phải truyền `context` (của trang), KHÔNG PHẢI `ctx` (của dialog)
+                  _transferProducts(context, batchIds, receiverId);
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -242,8 +240,9 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
 
-      if (byteData == null)
+      if (byteData == null) {
         throw Exception("Could not get byte data from image");
+      }
 
       final pngBytes = byteData.buffer.asUint8List();
 
@@ -363,8 +362,10 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
           actions: [
             IconButton(
               icon: const Icon(Icons.refresh, color: _accentColor),
-              onPressed: () =>
-                  context.read<DashboardBloc>().add(FetchProductsEvent()),
+              onPressed: _isTransferring
+                  ? null
+                  : () => // Vô hiệu hoá khi transfer
+                        context.read<DashboardBloc>().add(FetchProductsEvent()),
             ),
           ],
         ),
@@ -372,8 +373,7 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
           listener: (context, state) {
             if (!mounted) return;
 
-            // ✅ SỬA: Chỉ lắng nghe các lỗi/success KHÔNG phải
-            // trong quá trình transfer (vì ta đã xử lý riêng)
+            // Chỉ lắng nghe lỗi/success KHÔNG liên quan đến transfer
             if (state is DashboardSuccessState &&
                 !state.message.contains("Product created") &&
                 !_isTransferring) {
@@ -388,7 +388,6 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                   state.error.contains("Lỗi khởi tạo") ||
                   state.error.contains("Failed to load products");
 
-              // Không hiển thị lỗi nếu là lỗi tạo sp HOẶC lỗi transfer
               if (!state.error.contains("create product") &&
                   !state.error.contains("chuyển giao")) {
                 _showErrorDialog(
@@ -403,13 +402,11 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
             final products = state.products;
             products.sort((a, b) => b.date.compareTo(a.date));
 
-            // ✅ SỬA: Biến loading chính
             final bool isPageLoading =
                 (state is DashboardLoadingState &&
                 products.isEmpty &&
                 !_isTransferring);
 
-            // ✅ SỬA: Biến loading phụ (thanh progress bar)
             final bool isProcessing =
                 (state is DashboardLoadingState && products.isNotEmpty) ||
                 _isTransferring;
@@ -428,7 +425,6 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                 Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: ElevatedButton.icon(
-                    // Vô hiệu hoá khi đang xử lý
                     onPressed: isProcessing
                         ? null
                         : () => _showCreateProductModal(context),
@@ -461,7 +457,6 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                         Checkbox(
                           value: _selectAll,
                           activeColor: _accentColor,
-                          // Vô hiệu hoá khi đang xử lý
                           onChanged: isProcessing
                               ? null
                               : (val) {
@@ -484,7 +479,6 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                         const Spacer(),
                         if (_selectedBatchIds.isNotEmpty)
                           ElevatedButton.icon(
-                            // Vô hiệu hoá khi đang xử lý
                             onPressed: isProcessing
                                 ? null
                                 : () => _showTransferProductModal(
