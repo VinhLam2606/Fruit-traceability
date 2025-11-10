@@ -23,8 +23,11 @@ class AuthRegisterRequested extends AuthEvent {
 
 class AuthEmailVerificationChecked extends AuthEvent {
   final String email;
-  AuthEmailVerificationChecked(this.email);
+  final String accountType; 
+  final String username;    
+  AuthEmailVerificationChecked(this.email, this.accountType, this.username);
 }
+
 
 class AuthLogoutRequested extends AuthEvent {}
 

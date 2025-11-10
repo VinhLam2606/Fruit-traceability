@@ -6,7 +6,6 @@ import 'package:untitled/dashboard/bloc/organization_bloc.dart';
 import 'package:untitled/dashboard/bloc/scan_bloc.dart';
 import 'package:untitled/dashboard/bloc/user_organization_bloc.dart';
 import 'package:untitled/dashboard/ui/account_page.dart';
-// import 'package:untitled/dashboard/ui/home_page.dart'; // Đã xóa import HomePage
 import 'package:untitled/dashboard/ui/organization_management_page.dart';
 import 'package:untitled/dashboard/ui/scan_barcode_page.dart';
 
@@ -20,8 +19,6 @@ class MainNavigationPage extends StatefulWidget {
 }
 
 class _MainNavigationPageState extends State<MainNavigationPage> {
-  // ✅ Sau khi xóa Home, chỉ còn 4 trang. Index bắt đầu từ 0.
-  // Trang ScanBarCodePage sẽ là index 0.
   int _selectedIndex = 0;
 
   void _onItemTapped(int index) {
@@ -33,28 +30,66 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<DashboardBloc, DashboardState>(
+      // ✅✅✅ SỬA LỖI QUAN TRỌNG NHẤT ✅✅✅
+      // `buildWhen` ngăn BlocBuilder phá huỷ UI chính
+      // khi có các state loading/error (do tạo/transfer sản phẩm)
+      buildWhen: (previous, current) {
+        // Nếu state trước đó là một state thành công (đã vào app)
+        if (previous is DashboardInitialSuccessState ||
+            previous is ProductsLoadedState ||
+            previous is DashboardSuccessState) {
+          // Và state mới là loading/error (do tạo sản phẩm, etc.)
+          if (current is DashboardLoadingState ||
+              current is DashboardErrorState) {
+            // Thì KHÔNG xây dựng lại -> UI chính được giữ nguyên
+            return false;
+          }
+        }
+        // Cho phép xây dựng lại trong mọi trường hợp khác (như lúc khởi động)
+        return true;
+      },
       builder: (context, state) {
+        // 1. Xử lý lúc khởi động
         if (state is DashboardLoadingState || state is DashboardInitial) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
+        // 2. Xử lý lỗi khởi động
         if (state is DashboardErrorState) {
           return Scaffold(
             body: Center(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  "Lỗi Khởi Tạo:\n${state.error}",
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.red),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      "Lỗi Khởi Tạo:\n${state.error}",
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: () {
+                        // Thêm nút thử lại
+                        context.read<DashboardBloc>().add(
+                          DashboardInitialFetchEvent(),
+                        );
+                      },
+                      child: const Text("Thử lại"),
+                    ),
+                  ],
                 ),
               ),
             ),
           );
         }
 
+        // 3. Xây dựng UI chính (chỉ chạy 1 lần lúc khởi động thành công)
+        // Nhờ `buildWhen`, nó sẽ không chạy lại và phá huỷ UI
+        // khi `state` là `DashboardLoadingState` (do tạo sản phẩm)
         if (state is DashboardInitialSuccessState ||
             state is ProductsLoadedState ||
             state is DashboardSuccessState) {
@@ -74,7 +109,6 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
                   credentials: dashboardBloc.credentials,
                 )..add(FetchOrganizationDetails()),
               ),
-              // ScanBloc giờ chỉ cần web3client
               BlocProvider<ScanBloc>(
                 create: (context) => ScanBloc(
                   web3client: dashboardBloc.web3client,
@@ -92,6 +126,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
           );
         }
 
+        // 4. Trạng thái dự phòng
         return const Scaffold(
           body: Center(child: Text("Trạng thái không xác định.")),
         );
@@ -100,7 +135,6 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   }
 
   Widget _buildScaffold() {
-    // ✅ XÓA HomePage VÀ DỜI ScanBarcodePage LÊN ĐẦU TIÊN
     final List<Widget> widgetOptions = [
       const ScanBarcodePage(), // Index 0: Scan
       const OrganizationManagementPage(), // Index 1: Organization
@@ -109,7 +143,6 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     ];
 
     return Scaffold(
-      // Áp dụng màu nền gradient tối cho toàn bộ màn hình
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -118,37 +151,31 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
             colors: [Color(0xFF141E30), Color(0xFF243B55)],
           ),
         ),
-        // Sử dụng IndexedStack để giữ trạng thái của các trang con
         child: IndexedStack(index: _selectedIndex, children: widgetOptions),
       ),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
-          // ✅ DỜI SCAN LÊN ĐẦU (Index 0)
           BottomNavigationBarItem(
             icon: Icon(Icons.qr_code_scanner),
             label: 'Scan',
           ),
-          // ✅ DỜI ORGANIZATION LÊN VỊ TRÍ THỨ 2 (Index 1)
           BottomNavigationBarItem(
             icon: Icon(Icons.business),
             label: 'Organization',
           ),
-          // ✅ PRODUCT (Index 2)
           BottomNavigationBarItem(
             icon: Icon(Icons.inventory_2),
             label: 'Product',
           ),
-          // ✅ ACCOUNT (Index 3)
           BottomNavigationBarItem(
             icon: Icon(Icons.account_circle),
             label: 'Account',
           ),
         ],
         currentIndex: _selectedIndex,
-        // Cập nhật màu sắc cho BottomNavigationBar
-        selectedItemColor: Colors.greenAccent, // Màu điểm nhấn
-        unselectedItemColor: Colors.white70, // Màu cho item không được chọn
-        backgroundColor: const Color(0xFF243B55), // Màu nền tối
+        selectedItemColor: Colors.greenAccent,
+        unselectedItemColor: Colors.white70,
+        backgroundColor: const Color(0xFF243B55),
         showUnselectedLabels: true,
         onTap: _onItemTapped,
         type: BottomNavigationBarType.fixed,

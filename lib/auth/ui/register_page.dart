@@ -1,17 +1,14 @@
-import 'dart:convert';
-import 'dart:math';
+// ignore_for_file: unused_field
 
-import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
-import 'package:hd_wallet_kit/hd_wallet_kit.dart';
-import 'package:http/http.dart' as http;
-import 'package:untitled/auth/service/auth_service.dart';
-import 'package:untitled/auth/service/walletExt_service.dart';
-import 'package:web3dart/crypto.dart' as crypto;
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:untitled/auth/bloc/auth_bloc.dart';
+import 'package:untitled/auth/bloc/auth_event.dart';
+import 'package:untitled/auth/bloc/auth_state.dart';
 import 'package:web3dart/web3dart.dart';
+import 'verify_email_page.dart'; 
+import 'organization_form_page.dart';
 
 class RegisterPage extends StatefulWidget {
   final Function()? onTap;
@@ -30,322 +27,12 @@ class _RegisterPageState extends State<RegisterPage> {
 
   String accountType = "user";
   String errorMessage = '';
-  bool _isLoading = false;
 
   late Web3Client ethClient;
   DeployedContract? usersContract;
 
   static String providedPrivateKey = "";
   static String providedAddress = "";
-
-  @override
-  void initState() {
-    super.initState();
-    ethClient = Web3Client("http://10.0.2.2:7545", http.Client());
-    _loadContract();
-  }
-
-  @override
-  void dispose() {
-    emailController.dispose();
-    passwordController.dispose();
-    confirmPasswordController.dispose();
-    usernameController.dispose();
-    super.dispose();
-  }
-
-  // 🧩 Lấy tất cả tài khoản Ganache
-  Future<List<String>> getGanacheAccounts() async {
-    final res = await http.post(
-      Uri.parse("http://10.0.2.2:7545"),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "jsonrpc": "2.0",
-        "method": "eth_accounts",
-        "params": [],
-        "id": 1,
-      }),
-    );
-
-    final body = jsonDecode(res.body);
-    if (body["result"] != null) {
-      return List<String>.from(body["result"]);
-    }
-    return [];
-  }
-
-  // 🧩 Tạo private key từ mnemonic (Ganache mặc định)
-  String derivePrivateKeyFromMnemonic(String mnemonic, {int accountIndex = 0}) {
-    final words = mnemonic.trim().split(RegExp(r'\s+'));
-    final seed = Mnemonic.toSeed(words);
-    final hdWallet = HDWallet.fromSeed(seed: seed);
-    final path = "m/44'/60'/0'/0/$accountIndex";
-    final derivedKey = hdWallet.deriveChildKeyByPath(path);
-    return derivedKey.privateKeyHex0x;
-  }
-
-  // 🧩 Lấy tài khoản Ganache chưa dùng
-  Future<void> initGanacheAccount() async {
-    const mnemonic =
-        "pony cheese victory dismiss prize chair believe swing indicate wrong drip avoid";
-
-    try {
-      final ganacheAccounts = await getGanacheAccounts();
-      if (ganacheAccounts.isEmpty) {
-        throw Exception("Không tìm thấy tài khoản Ganache nào!");
-      }
-
-      final random = Random();
-      final usedAddresses = await _getUsedBlockchainAddresses();
-      final shuffledIndexes = List.generate(ganacheAccounts.length, (i) => i)
-        ..shuffle(random);
-
-      for (final idx in shuffledIndexes) {
-        final privateKey = derivePrivateKeyFromMnemonic(
-          mnemonic,
-          accountIndex: idx,
-        );
-        final key = EthPrivateKey.fromHex(privateKey);
-        final address = await key.extractAddress();
-
-        if (usedAddresses.contains(address.hex.toLowerCase())) continue;
-
-        final balance = await ethClient.getBalance(address);
-        if (balance.getInEther == BigInt.zero) continue;
-
-        final alreadyRegistered = await _isUserAlreadyRegistered(address);
-        if (!alreadyRegistered) {
-          providedPrivateKey = privateKey;
-          providedAddress = address.hex;
-          print("🟢 Dùng tài khoản Ganache #$idx: $providedAddress");
-          return;
-        }
-      }
-
-      throw Exception("Không còn tài khoản Ganache khả dụng!");
-    } catch (e) {
-      print("❌ Lỗi initGanacheAccount: $e");
-      rethrow;
-    }
-  }
-
-  // 🧩 Lấy danh sách ví đã dùng trên Firestore
-  Future<List<String>> _getUsedBlockchainAddresses() async {
-    final snapshot = await FirebaseFirestore.instance.collection("users").get();
-    final List<String> addresses = [];
-
-    for (final doc in snapshot.docs) {
-      final data = doc.data();
-      if (data.containsKey("eth_address")) {
-        final addr = data["eth_address"];
-        if (addr is String && addr.isNotEmpty) {
-          addresses.add(addr.toLowerCase());
-        }
-      }
-    }
-    return addresses;
-  }
-
-  // 🧩 Load ABI contract
-  Future<void> _loadContract() async {
-    try {
-      final abiJson = jsonDecode(
-        await rootBundle.loadString("build/contracts/Chain.json"),
-      );
-      final abi = jsonEncode(abiJson["abi"]);
-      const networkId = "5777";
-      final contractAddr = EthereumAddress.fromHex(
-        abiJson["networks"][networkId]["address"],
-      );
-      usersContract = DeployedContract(
-        ContractAbi.fromJson(abi, "Chain"),
-        contractAddr,
-      );
-      print("✅ Contract loaded at $contractAddr");
-    } catch (e) {
-      print("⚠️ Lỗi load contract: $e");
-    }
-  }
-
-  // 🧩 Kiểm tra user đã đăng ký on-chain chưa
-  Future<bool> _isUserAlreadyRegistered(EthereumAddress walletAddress) async {
-    try {
-      if (usersContract == null) throw Exception("Contract chưa load");
-      final fn = usersContract!.function("isRegisteredAuth");
-      final result = await ethClient.call(
-        contract: usersContract!,
-        function: fn,
-        params: [walletAddress],
-      );
-      return result.isNotEmpty && result.first == true;
-    } catch (e) {
-      print("⚠️ Check registered error: $e");
-      return false;
-    }
-  }
-
-  Future<bool> _isBlockchainAvailable() async {
-    try {
-      await ethClient.getNetworkId();
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  // 🧩 Ghi user lên blockchain
-  Future<String> _registerOnBlockchain(
-    String username,
-    String email,
-    EthPrivateKey senderKey,
-    EthereumAddress walletAddress,
-  ) async {
-    if (usersContract == null) throw Exception("Contract not loaded");
-    final fn = usersContract!.function("registerUser");
-    final txHash = await ethClient.sendTransaction(
-      senderKey,
-      Transaction.callContract(
-        contract: usersContract!,
-        function: fn,
-        parameters: [walletAddress, email],
-      ),
-      chainId: 1337,
-    );
-    print("👤 Blockchain: registerUser txHash=$txHash");
-    return txHash;
-  }
-
-  // 🧩 Ghi tổ chức lên blockchain
-  Future<String> _addOrganization(
-    String orgName,
-    EthPrivateKey senderKey,
-  ) async {
-    if (usersContract == null) throw Exception("Contract not loaded");
-    final fn = usersContract!.function("addOrganization");
-    final txHash = await ethClient.sendTransaction(
-      senderKey,
-      Transaction.callContract(
-        contract: usersContract!,
-        function: fn,
-        parameters: [
-          orgName,
-          BigInt.from(DateTime.now().millisecondsSinceEpoch),
-        ],
-      ),
-      chainId: 1337,
-    );
-    print("🏢 Blockchain: addOrganization txHash=$txHash");
-    return txHash;
-  }
-
-  Future<void> _waitForTx(String txHash) async {
-    print("⏳ Waiting for tx $txHash...");
-    while (true) {
-      final receipt = await ethClient.getTransactionReceipt(txHash);
-      if (receipt != null) {
-        print("✅ Tx mined: $txHash");
-        break;
-      }
-      await Future.delayed(const Duration(seconds: 2));
-    }
-  }
-
-  // 🧩 Đăng ký tài khoản (Firebase + Blockchain)
-  void register() async {
-    if (!_formKey.currentState!.validate() || _isLoading) return;
-    setState(() => _isLoading = true);
-
-    final email = emailController.text.trim();
-    final password = passwordController.text.trim();
-    final username = usernameController.text.trim();
-
-    try {
-      if (!await _isBlockchainAvailable()) {
-        throw Exception("Không thể kết nối tới Ganache!");
-      }
-
-      await initGanacheAccount();
-
-      final firebaseUser = await authService.value.createAccount(
-        email: email,
-        password: password,
-      );
-
-      final credentials = EthPrivateKey.fromHex(providedPrivateKey);
-      final walletAddress = EthereumAddress.fromHex(providedAddress);
-      final pKeyHex = crypto.bytesToHex(
-        credentials.privateKey,
-        include0x: true,
-      );
-      final ethAddressHex = walletAddress.hex.toLowerCase();
-
-      final regTx = await _registerOnBlockchain(
-        username,
-        email,
-        credentials,
-        walletAddress,
-      );
-      await _waitForTx(regTx);
-
-      String roleToSave = "Customer";
-      bool orgDetailsSubmitted = true; // Mặc định là true cho 'user'
-
-      if (accountType == "organization") {
-        final orgTx = await _addOrganization("${username}_org", credentials);
-        await _waitForTx(orgTx);
-        print("🏢 Created organization for $username (role=Manufacturer)");
-        roleToSave = "Manufacturer";
-        orgDetailsSubmitted = false; // 🔥 ĐẶT LÀ FALSE KHI TẠO ORG
-      }
-
-      // 🔥 TẠO MAP DỮ LIỆU
-      final Map<String, dynamic> userData = {
-        "username": username,
-        "email": email,
-        "role": roleToSave,
-        "accountType": accountType,
-        "eth_address": ethAddressHex,
-        "private_key": pKeyHex,
-        "createdAt": FieldValue.serverTimestamp(),
-        "isOrganizationDetailsSubmitted": orgDetailsSubmitted,
-      };
-
-      // 🔥 Ghi vào Firestore
-      await FirebaseFirestore.instance
-          .collection("users")
-          .doc(firebaseUser.user!.uid)
-          .set(userData);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("✅ Đăng ký $roleToSave thành công!")),
-      );
-
-      // 🔥🔥 SỬA LỖI: CẬP NHẬT AUTHSERVICE NGAY LẬP TỨC 🔥🔥
-      // Điều này sẽ kích hoạt AuthLayout rebuild với dữ liệu MỚI NHẤT
-      authService.value.userData = {
-        "username": username,
-        "accountType": accountType,
-        "eth_address": ethAddressHex,
-        "private_key": pKeyHex,
-        "isOrganizationDetailsSubmitted": orgDetailsSubmitted,
-      };
-      authService.notifyListeners();
-    } catch (e) {
-      print("❌ Lỗi đăng ký: $e");
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("❌ Lỗi: $e")));
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser != null) {
-        await currentUser.delete();
-        print("🧹 Firebase user deleted due to blockchain failure.");
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  // ---------------- UI ------------------
 
   @override
   Widget build(BuildContext context) {
@@ -461,38 +148,101 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                     const SizedBox(height: 35),
 
-                    // Register button
+                    // Register button + BlocConsumer
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: register,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.greenAccent,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          elevation: 10,
-                          shadowColor: Colors.greenAccent.withOpacity(0.5),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 22,
-                                width: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.black,
+                      child: BlocConsumer<AuthBloc, AuthState>(
+                        listener: (context, state) {
+                          if (state is AuthEmailVerificationPending) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  "📩 Verification email sent to ${state.email}.",
                                 ),
-                              )
-                            : const Text(
-                                "REGISTER",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.2,
+                                backgroundColor: Colors.greenAccent,
+                              ),
+                            );
+                            // 🔥 chuyển sang màn hình xác minh email
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => VerifyEmailPage(
+                                  email: state.email,
+                                  accountType: accountType,
+                                  username: usernameController.text.trim(),
                                 ),
                               ),
+                            );
+                          } else if (state is AuthSuccess) {
+                            if (state.accountType == "organization") {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => OrganizationFormPage(
+                                    ethAddress: AuthBloc.providedAddress,
+                                    privateKey: AuthBloc.providedPrivateKey,
+                                  ),
+                                ),
+                              );
+                            }
+                          } else if (state is AuthFailure) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(state.message),
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                          }
+                        },
+                        builder: (context, state) {
+                          final isLoading = state is AuthLoading;
+
+                          return ElevatedButton(
+                            onPressed: isLoading
+                                ? null
+                                : () {
+                                    if (_formKey.currentState!.validate()) {
+                                      context.read<AuthBloc>().add(
+                                        AuthRegisterRequested(
+                                          email: emailController.text.trim(),
+                                          password: passwordController.text
+                                              .trim(),
+                                          username: usernameController.text
+                                              .trim(),
+                                          accountType: accountType,
+                                        ),
+                                      );
+                                    }
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.greenAccent,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                              elevation: 10,
+                              shadowColor: Colors.greenAccent.withOpacity(0.5),
+                            ),
+                            child: isLoading
+                                ? const SizedBox(
+                                    height: 22,
+                                    width: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.black,
+                                    ),
+                                  )
+                                : const Text(
+                                    "REGISTER",
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.2,
+                                    ),
+                                  ),
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(height: 16),

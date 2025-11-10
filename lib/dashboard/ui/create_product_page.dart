@@ -12,7 +12,6 @@ import 'package:untitled/dashboard/model/product.dart';
 
 class CreateProductPage extends StatelessWidget {
   const CreateProductPage({super.key});
-
   @override
   Widget build(BuildContext context) {
     return const CreateProductView();
@@ -21,7 +20,6 @@ class CreateProductPage extends StatelessWidget {
 
 class CreateProductView extends StatefulWidget {
   const CreateProductView({super.key});
-
   @override
   State<CreateProductView> createState() => _CreateProductViewState();
 }
@@ -78,7 +76,6 @@ class _CreateProductViewState extends State<CreateProductView> {
           colors: _backgroundGradient,
         ),
       ),
-      // ✅ Khôi phục lại BlocConsumer đơn giản chỉ cho DashboardBloc
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
@@ -89,21 +86,22 @@ class _CreateProductViewState extends State<CreateProductView> {
         body: BlocConsumer<DashboardBloc, DashboardState>(
           listenWhen: (previous, current) => current is! ProductsLoadedState,
           listener: (context, state) {
-            if (state is DashboardSuccessState) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(state.message),
-                  backgroundColor: _accentColor,
-                ),
-              );
-              context.read<DashboardBloc>().add(FetchProductsEvent());
-            } else if (state is DashboardErrorState) {
+            if (!mounted) return;
+
+            // ✅ SỬA: Chỉ lắng nghe SnackBar cho lỗi chung,
+            // không phải lỗi khi đang xử lý (vì ta sẽ await nó)
+            if (state is DashboardErrorState && !_isProcessing) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(state.error),
                   backgroundColor: Colors.redAccent,
                 ),
               );
+            }
+            // ✅ SỬA: Chỉ refresh list khi tạo xong (success) và không
+            // còn đang xử lý (tránh gọi 2 lần)
+            else if (state is DashboardSuccessState && !_isProcessing) {
+              context.read<DashboardBloc>().add(FetchProductsEvent());
             }
           },
           builder: (context, state) {
@@ -116,7 +114,7 @@ class _CreateProductViewState extends State<CreateProductView> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Column(
                 children: [
-                  _buildCreateProductForm(context, isLoading),
+                  _buildCreateProductForm(isLoading),
                   const SizedBox(height: 24),
                   const Divider(color: Colors.white30),
                   _buildProductList(context, state, isLoading),
@@ -129,7 +127,7 @@ class _CreateProductViewState extends State<CreateProductView> {
     );
   }
 
-  Widget _buildCreateProductForm(BuildContext context, bool isLoading) {
+  Widget _buildCreateProductForm(bool isLoading) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -163,7 +161,7 @@ class _CreateProductViewState extends State<CreateProductView> {
               child: ElevatedButton(
                 onPressed: isLoading
                     ? null
-                    : () => _createProductsSequentially(context, false),
+                    : () => _createProductsSequentially(false),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blueAccent,
                   foregroundColor: Colors.white,
@@ -183,7 +181,7 @@ class _CreateProductViewState extends State<CreateProductView> {
               child: ElevatedButton(
                 onPressed: isLoading
                     ? null
-                    : () => _createProductsSequentially(context, true),
+                    : () => _createProductsSequentially(true),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _accentColor,
                   foregroundColor: Colors.black,
@@ -204,10 +202,7 @@ class _CreateProductViewState extends State<CreateProductView> {
     );
   }
 
-  Future<void> _createProductsSequentially(
-      BuildContext context,
-      bool generatePdf,
-      ) async {
+  Future<void> _createProductsSequentially(bool generatePdf) async {
     final int quantity = int.tryParse(quantityController.text) ?? 1;
     final int currentTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final String baseName = nameController.text.trim();
@@ -218,6 +213,7 @@ class _CreateProductViewState extends State<CreateProductView> {
         quantity <= 0 ||
         seedVariety.isEmpty ||
         origin.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Please enter valid product info."),
@@ -227,15 +223,25 @@ class _CreateProductViewState extends State<CreateProductView> {
       return;
     }
 
-    _showLoadingDialog(context);
+    if (!mounted) return;
+    _showLoadingDialog();
 
     setState(() {
       _isProcessing = true;
       _createdProducts.clear();
     });
 
+    // ✅✅✅ SỬA LỖI UI: LẤY BLOC RA NGOÀI ✅✅✅
+    final bloc = context.read<DashboardBloc>();
+    bool stoppedDueToError = false;
+
     try {
       for (int i = 1; i <= quantity; i++) {
+        if (!mounted) {
+          stoppedDueToError = true; // Dừng nếu widget bị huỷ
+          break;
+        }
+
         final generatedBatchId = _generateBatchId();
         final name = quantity > 1 ? "$baseName #$i" : baseName;
 
@@ -254,7 +260,8 @@ class _CreateProductViewState extends State<CreateProductView> {
 
         _createdProducts.add(product);
 
-        context.read<DashboardBloc>().add(
+        // 1. Gửi sự kiện
+        bloc.add(
           CreateProductButtonPressedEvent(
             batchId: generatedBatchId,
             name: name,
@@ -264,24 +271,47 @@ class _CreateProductViewState extends State<CreateProductView> {
           ),
         );
 
-        await Future.delayed(const Duration(seconds: 2));
+        // ✅✅✅ SỬA LỖI UI: CHỜ BLOC PHẢN HỒI (SUCCESS/ERROR) ✅✅✅
+        // (BLoC bây giờ cũng đang chờ blockchain, nên việc này là an toàn)
+        final stateAfterCreate = await bloc.stream.firstWhere(
+                (state) => state is DashboardSuccessState || state is DashboardErrorState);
+
+        // 3. Nếu BLoC trả về lỗi, dừng vòng lặp
+        if (stateAfterCreate is DashboardErrorState) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Lỗi khi tạo sản phẩm #$i: ${stateAfterCreate.error}. Dừng lại."),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+          stoppedDueToError = true;
+          break; // Thoát khỏi vòng lặp
+        }
       }
 
-      if (generatePdf) {
+      if (!mounted) return;
+      if (generatePdf && !stoppedDueToError) {
         await _generateQrPdf(_createdProducts);
       }
 
+      if (!mounted) return;
       nameController.clear();
       seedVarietyController.clear();
       originController.clear();
       quantityController.text = '1';
+
     } finally {
-      _hideLoadingDialog(context);
-      setState(() => _isProcessing = false);
+      if (mounted) {
+        _hideLoadingDialog();
+        setState(() => _isProcessing = false);
+        // Sau khi tất cả đã xong, gọi fetch 1 lần
+        context.read<DashboardBloc>().add(FetchProductsEvent());
+      }
     }
   }
 
-  void _showLoadingDialog(BuildContext context) {
+  void _showLoadingDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -290,15 +320,14 @@ class _CreateProductViewState extends State<CreateProductView> {
     );
   }
 
-  void _hideLoadingDialog(BuildContext context) {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    }
+  void _hideLoadingDialog() {
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) navigator.pop();
   }
 
   Future<void> _generateQrPdf(List<Product> products) async {
     final pdf = pw.Document();
-
     const int columns = 3;
     const int rows = 4;
     int totalPerPage = columns * rows;
@@ -366,6 +395,7 @@ class _CreateProductViewState extends State<CreateProductView> {
       );
     }
 
+    if (!mounted) return;
     await Printing.sharePdf(
       bytes: await pdf.save(),
       filename: "product_barcodes.pdf",
@@ -387,7 +417,6 @@ class _CreateProductViewState extends State<CreateProductView> {
     );
   }
 
-  // ✅ Khôi phục lại hàm show dialog đơn giản
   void _showProductDetailsDialog(BuildContext context, Product product) {
     showDialog(
       context: context,
@@ -402,9 +431,7 @@ class _CreateProductViewState extends State<CreateProductView> {
       DashboardState state,
       bool isLoading,
       ) {
-    final products = state is ProductsLoadedState
-        ? state.products.reversed.toList()
-        : <Product>[];
+    final products = state.products.reversed.toList();
 
     return Expanded(
       child: Column(
@@ -488,7 +515,6 @@ class _CreateProductViewState extends State<CreateProductView> {
                             Icons.info_outline,
                             color: Colors.white70,
                           ),
-                          // ✅ Khôi phục lại onPressed đơn giản
                           onPressed: () =>
                               _showProductDetailsDialog(context, product),
                         ),
@@ -504,15 +530,10 @@ class _CreateProductViewState extends State<CreateProductView> {
   }
 }
 
-// ===================================================================
-// === ⛔️ CẬP NHẬT: Đã xóa phần Process History khỏi Dialog này ===
-// ===================================================================
 class ProductDetailsDialog extends StatelessWidget {
   final Product product;
-
   const ProductDetailsDialog({super.key, required this.product});
 
-  // Helper để định dạng timestamp
   String _formatTimestamp(BigInt timestamp) {
     if (timestamp == BigInt.zero) return "N/A";
     final dateTime = DateTime.fromMillisecondsSinceEpoch(
@@ -561,7 +582,6 @@ class ProductDetailsDialog extends StatelessWidget {
                 isAddress: true,
               ),
               _buildDetailRow("Organization:", product.organizationName),
-              // ⛔️ Đã xóa _buildProcessSteps() và SizedBox
             ],
           ),
         ),
@@ -569,7 +589,6 @@ class ProductDetailsDialog extends StatelessWidget {
     );
   }
 
-  // ✅ Khôi phục lại _buildDetailRow gốc (kiểu dáng đơn giản)
   Widget _buildDetailRow(String title, String value, {bool isAddress = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -591,14 +610,10 @@ class ProductDetailsDialog extends StatelessWidget {
       ),
     );
   }
-// ⛔️ Đã xóa _buildProcessSteps()
-// ⛔️ Đã xóa _buildProcessStepCard()
 }
 
-// (CustomLoadingDialog giữ nguyên)
 class CustomLoadingDialog extends StatelessWidget {
   const CustomLoadingDialog({super.key});
-
   @override
   Widget build(BuildContext context) {
     const Color accentColor = Colors.greenAccent;

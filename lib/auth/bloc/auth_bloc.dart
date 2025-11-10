@@ -1,4 +1,4 @@
-// ignore_for_file: avoid_print
+// ignore_for_file: avoid_print, unused_element
 
 import 'dart:convert';
 import 'package:bloc/bloc.dart';
@@ -25,7 +25,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   static String providedAddress = "";
 
   AuthBloc(this._authService) : super(AuthInitial()) {
-    ethClient = Web3Client("http://10.0.2.2:7545", http.Client());
+    ethClient = Web3Client("http://192.168.102.5:7545", http.Client());
     _loadContract();
 
     on<AuthStarted>(_onAuthStarted);
@@ -36,34 +36,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthForgotPasswordRequested>(_onForgotPasswordRequested);
   }
 
-  Future<void> _initGanacheAccount() async {
-    const mnemonic =
-        "journey silk gossip expand violin spice select common emotion leader squeeze someone";
-
-    final ganacheAccounts = await _getGanacheAccounts();
-    if (ganacheAccounts.isEmpty) {
-      throw Exception("Ganache RPC returned no accounts.");
-    }
-
-    for (int i = 0; i < 10; i++) {
-      final derivedKey = _derivePrivateKeyFromMnemonic(mnemonic, i);
-      final credentials = EthPrivateKey.fromHex(derivedKey);
-      final address = await credentials.extractAddress();
-
-      final balance = await ethClient.getBalance(address);
-      if (balance.getInEther == BigInt.zero) continue;
-
-      final alreadyRegistered = await _isUserAlreadyRegistered(address);
-      if (!alreadyRegistered) {
-        providedPrivateKey = derivedKey;
-        providedAddress = address.hex;
-        print("🟢 Selected funded account #$i: $providedAddress");
-        return;
-      }
-    }
-    throw Exception("No funded & unregistered Ganache accounts available!");
-  }
-
+  // ---------------------------------------------------------
+  // AUTH STARTUP
+  // ---------------------------------------------------------
   Future<void> _onAuthStarted(
     AuthStarted event,
     Emitter<AuthState> emit,
@@ -71,18 +46,28 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthInitial());
   }
 
+  // ---------------------------------------------------------
+  // LOGIN
+  // ---------------------------------------------------------
   Future<void> _onLoginRequested(
     AuthLoginRequested event,
     Emitter<AuthState> emit,
   ) async {
     emit(AuthLoading());
     try {
-      print("🔑 [AuthBloc] Logging in user with email: ${event.email}");
-      await _authService.signIn(email: event.email, password: event.password);
+      print("🔑 [AuthBloc] Logging in: ${event.email}");
+      final userCred = await _authService.signIn(
+        email: event.email,
+        password: event.password,
+      );
 
-      print("✅ [AuthBloc] Login successful for: ${_authService.username}");
-      print("🪪 Wallet: ${_authService.walletAddress}");
-      print("👤 Account Type: ${_authService.accountType}");
+      // kiểm tra xác thực email
+      await userCred.user?.reload();
+      if (!(userCred.user?.emailVerified ?? false)) {
+        emit(AuthFailure("Email not verified. Please check your inbox."));
+        await _authService.signOut();
+        return;
+      }
 
       emit(
         AuthSuccess(
@@ -91,14 +76,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           accountType: _authService.accountType ?? '',
         ),
       );
-
-      print("✨ [AuthBloc] Welcome back, ${_authService.username ?? 'User'}!");
+      print("✅ Login successful: ${_authService.username}");
     } catch (e) {
-      print("❌ [AuthBloc] Login failed: $e");
+      print("❌ Login failed: $e");
       emit(AuthFailure(e.toString()));
     }
   }
 
+  // ---------------------------------------------------------
+  // LOGOUT
+  // ---------------------------------------------------------
   Future<void> _onLogoutRequested(
     AuthLogoutRequested event,
     Emitter<AuthState> emit,
@@ -107,108 +94,51 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoggedOut());
   }
 
+  // ---------------------------------------------------------
+  // FORGOT PASSWORD
+  // ---------------------------------------------------------
   Future<void> _onForgotPasswordRequested(
-      AuthForgotPasswordRequested event,
-      Emitter<AuthState> emit,
-      ) async {
+    AuthForgotPasswordRequested event,
+    Emitter<AuthState> emit,
+  ) async {
     emit(AuthLoading());
     try {
-      print("📧 [AuthBloc] Requesting password reset for: ${event.email}");
-
-      // Gọi hàm từ AuthService
       await _authService.sendPasswordResetEmail(email: event.email);
-
-      print("✅ [AuthBloc] Password reset email sent successfully.");
-
-      // Phát ra State thông báo thành công cho UI
       emit(AuthPasswordResetEmailSent(event.email));
     } catch (e) {
-      print("❌ [AuthBloc] Password reset failed: $e");
-      // Phát ra State thất bại
       emit(AuthFailure(e.toString()));
     }
   }
 
+  // ---------------------------------------------------------
+  // REGISTER PHASE 1 — Firebase only
+  // ---------------------------------------------------------
   Future<void> _onRegisterRequested(
     AuthRegisterRequested event,
     Emitter<AuthState> emit,
   ) async {
     emit(AuthLoading());
     try {
-      // 1️⃣ Init Ganache & contract
-      await _loadContract();
-      await _initGanacheAccount();
-
-      if (usersContract == null) throw Exception("Contract not loaded");
-
-      final isOk = await _isBlockchainAvailable();
-      if (!isOk) throw Exception("Ganache RPC unavailable");
-
-      final credentials = EthPrivateKey.fromHex(providedPrivateKey);
-      final walletAddress = EthereumAddress.fromHex(providedAddress);
-
-      // 2️⃣ Check if user already registered on-chain
-      final alreadyExists = await _isUserAlreadyRegistered(walletAddress);
-      if (alreadyExists) {
-        throw Exception("User already registered on blockchain!");
-      }
-
-      // 3️⃣ Register user on blockchain
-      final txHash = await _registerOnBlockchain(
-        event.username,
-        event.email,
-        credentials,
-        walletAddress,
-      );
-      await _waitForTx(txHash);
-
-      // 4️⃣ If organization, also create org on-chain
-      String role = "Customer";
-      if (event.accountType == "organization") {
-        final orgTx = await _addOrganization(
-          "${event.username}_org",
-          credentials,
-        );
-        await _waitForTx(orgTx);
-        role = "Manufacturer";
-      }
-
-      // 5️⃣ Register on Firebase
+      print("🆕 [AuthBloc] Creating Firebase account for ${event.email}");
       final userCred = await _authService.createAccount(
         email: event.email,
         password: event.password,
       );
 
-      await _authService.sendEmailVerification(userCred.user!);
-
-      // 🔹 Ask user to verify first
-      emit(AuthEmailVerificationPending(email: event.email));
-
-      // 6️⃣ Save Firestore record
       await FirebaseFirestore.instance
-          .collection("users")
+          .collection("pending_users")
           .doc(userCred.user!.uid)
           .set({
-            "username": event.username,
             "email": event.email,
-            "role": role,
+            "username": event.username,
             "accountType": event.accountType,
-            "eth_address": walletAddress.hex,
-            "private_key": crypto.bytesToHex(
-              credentials.privateKey,
-              include0x: true,
-            ),
             "createdAt": FieldValue.serverTimestamp(),
           });
 
-      print("🎉 Registration completed successfully!");
-      emit(
-        AuthSuccess(
-          username: event.username,
-          walletAddress: providedAddress,
-          accountType: event.accountType,
-        ),
-      );
+      await _authService.sendEmailVerification(userCred.user!);
+      print("📩 Verification email sent → waiting for confirmation");
+
+      emit(AuthEmailVerificationPending(email: event.email));
     } catch (e) {
       print("❌ Registration failed: $e");
       emit(AuthFailure(e.toString()));
@@ -216,14 +146,123 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
         await currentUser.delete();
-        print("🧹 Firebase user deleted after failed blockchain registration.");
+        print("🧹 Deleted unverified Firebase user");
       }
     }
   }
 
-  // ------------------------------------------------------------
-  // 🔹 Blockchain helper methods
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------
+  // REGISTER PHASE 2 — After email verification
+  // ---------------------------------------------------------
+  Future<void> _onEmailVerificationChecked(
+    AuthEmailVerificationChecked event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(AuthLoading());
+    try {
+      final verified = await _authService.isEmailVerified();
+
+      if (!verified) {
+        emit(AuthFailure("Email not verified yet. Please check your inbox."));
+        return;
+      }
+
+      print("✅ Email verified → start blockchain + Firestore setup...");
+
+      // 1️⃣ Đọc lại thông tin accountType + username nếu bị mất
+      String accType = event.accountType;
+      String uname = event.username;
+
+      final currentUser = FirebaseAuth.instance.currentUser!;
+      final pendingDoc = await FirebaseFirestore.instance
+          .collection("pending_users")
+          .doc(currentUser.uid)
+          .get();
+
+      if ((accType.isEmpty || uname.isEmpty) && pendingDoc.exists) {
+        accType = pendingDoc.data()?["accountType"] ?? "user";
+        uname =
+            pendingDoc.data()?["username"] ??
+            currentUser.email?.split("@").first ??
+            "User";
+        print(
+          "ℹ️ [AuthBloc] Recovered accountType=$accType, username=$uname from pending_users",
+        );
+      }
+
+      // 2️⃣ Init Ganache + Contract
+      await _loadContract();
+      await _initGanacheAccount();
+
+      if (usersContract == null) throw Exception("Contract not loaded");
+      final credentials = EthPrivateKey.fromHex(providedPrivateKey);
+      final walletAddress = EthereumAddress.fromHex(providedAddress);
+
+      // 3️⃣ Check duplicate blockchain user
+      final alreadyExists = await _isUserAlreadyRegistered(walletAddress);
+      if (alreadyExists) throw Exception("User already exists on blockchain!");
+
+      // 4️⃣ Register on blockchain
+      final txHash = await _registerOnBlockchain(
+        currentUser.email ?? '',
+        currentUser.email ?? '',
+        credentials,
+        walletAddress,
+      );
+      await _waitForTx(txHash);
+
+      // 5️⃣ Save to Firestore (users)
+      await FirebaseFirestore.instance
+          .collection("users")
+          .doc(currentUser.uid)
+          .set({
+            "email": currentUser.email,
+            "username": uname,
+            "role": accType == "organization" ? "Manufacturer" : "Customer",
+            "accountType": accType,
+            "eth_address": walletAddress.hex,
+            "private_key": crypto.bytesToHex(
+              credentials.privateKey,
+              include0x: true,
+            ),
+            "createdAt": FieldValue.serverTimestamp(),
+            "isOrganizationDetailsSubmitted": accType == "organization"
+                ? false
+                : true,
+          });
+
+      // 6️⃣ Xoá dữ liệu tạm
+      await FirebaseFirestore.instance
+          .collection("pending_users")
+          .doc(currentUser.uid)
+          .delete()
+          .catchError((_) => print("⚠️ Không tìm thấy pending_users để xoá."));
+
+      print("🎉 Registration finalized successfully! -> type: $accType");
+
+      // 7️⃣ Phát sự kiện thành công
+      emit(
+        AuthSuccess(
+          username: uname,
+          walletAddress: walletAddress.hex,
+          accountType: accType,
+        ),
+      );
+
+      if (accType == "organization") {
+        print("🏭 Redirecting to OrganizationFormPage...");
+      } else {
+        print("👤 Normal user registered successfully.");
+      }
+    } catch (e) {
+      print("❌ Email verification completion failed: $e");
+      emit(AuthFailure(e.toString()));
+    }
+  }
+
+  // ---------------------------------------------------------
+  // 🔹 Blockchain Helper Methods
+  // ---------------------------------------------------------
   Future<void> _loadContract() async {
     try {
       final abiJson = jsonDecode(
@@ -244,9 +283,35 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  Future<void> _initGanacheAccount() async {
+    const mnemonic =
+        "ecology minimum unusual wall spatial lyrics gaze bundle waste aunt scissors sausage";
+
+    final ganacheAccounts = await _getGanacheAccounts();
+    if (ganacheAccounts.isEmpty) throw Exception("No Ganache accounts found.");
+
+    for (int i = 0; i < 10; i++) {
+      final derivedKey = _derivePrivateKeyFromMnemonic(mnemonic, i);
+      final credentials = EthPrivateKey.fromHex(derivedKey);
+      final address = await credentials.extractAddress();
+
+      final balance = await ethClient.getBalance(address);
+      if (balance.getInEther == BigInt.zero) continue;
+
+      final alreadyRegistered = await _isUserAlreadyRegistered(address);
+      if (!alreadyRegistered) {
+        providedPrivateKey = derivedKey;
+        providedAddress = address.hex;
+        print("🟢 Selected funded account #$i: $providedAddress");
+        return;
+      }
+    }
+    throw Exception("No funded & unregistered Ganache accounts available!");
+  }
+
   Future<List<String>> _getGanacheAccounts() async {
     final res = await http.post(
-      Uri.parse("http://10.0.2.2:7545"),
+      Uri.parse("http://192.168.102.5:7545"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         "jsonrpc": "2.0",
@@ -266,15 +331,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final path = "m/44'/60'/0'/0/$index";
     final derivedKey = hdWallet.deriveChildKeyByPath(path);
     return derivedKey.privateKeyHex0x;
-  }
-
-  Future<bool> _isBlockchainAvailable() async {
-    try {
-      await ethClient.getNetworkId();
-      return true;
-    } catch (_) {
-      return false;
-    }
   }
 
   Future<bool> _isUserAlreadyRegistered(EthereumAddress address) async {
@@ -305,47 +361,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       chainId: 1337,
     );
     print("👤 registerUser tx: $txHash");
-    return txHash;
-  }
-
-  // EMAIL CHECK
-  Future<void> _onEmailVerificationChecked(
-    AuthEmailVerificationChecked event,
-    Emitter<AuthState> emit,
-  ) async {
-    emit(AuthLoading());
-    final verified = await _authService.isEmailVerified();
-    if (verified) {
-      emit(
-        AuthSuccess(
-          username: _authService.username ?? '',
-          walletAddress: _authService.walletAddress ?? '',
-          accountType: _authService.accountType ?? '',
-        ),
-      );
-    } else {
-      emit(AuthFailure("Email not verified yet"));
-    }
-  }
-
-  Future<String> _addOrganization(
-    String orgName,
-    EthPrivateKey senderKey,
-  ) async {
-    final fn = usersContract!.function("addOrganization");
-    final txHash = await ethClient.sendTransaction(
-      senderKey,
-      Transaction.callContract(
-        contract: usersContract!,
-        function: fn,
-        parameters: [
-          orgName,
-          BigInt.from(DateTime.now().millisecondsSinceEpoch),
-        ],
-      ),
-      chainId: 1337,
-    );
-    print("🏢 addOrganization tx: $txHash");
     return txHash;
   }
 

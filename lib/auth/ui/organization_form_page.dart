@@ -3,9 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:untitled/auth/service/auth_service.dart';
 import 'package:untitled/auth/service/walletExt_service.dart';
+import 'package:untitled/auth/auth_layout.dart';
 import 'package:web3dart/credentials.dart';
-
-import 'login_or_register_page.dart';
 
 class OrganizationFormPage extends StatefulWidget {
   final String ethAddress;
@@ -32,7 +31,7 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
   final phoneController = TextEditingController();
   bool _isSaving = false;
 
-  // Danh sách các loại hình doanh nghiệp
+  // Danh sách loại hình doanh nghiệp
   final List<String> _businessTypes = [
     'LLC',
     'Corporation',
@@ -40,7 +39,7 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
     'Sole Proprietorship',
     'Cooperative',
     'Non-profit',
-    'Other'
+    'Other',
   ];
 
   String? _selectedBusinessType;
@@ -58,90 +57,84 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
 
   Future<void> _saveOrganizationInfo() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isSaving = true);
+
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) throw Exception("No user logged in.");
 
-      // 1️⃣ Save organization info to Firestore
-      await FirebaseFirestore.instance.collection("organizations").doc(uid).set(
-        {
-          "fullName": fullNameController.text.trim(),
-          "brandName": brandController.text.trim(),
-          "businessType": _selectedBusinessType,
-          "foundedYear": foundedYearController.text.trim(),
-          "address": addressController.text.trim(),
-          "phoneNumber": phoneController.text.trim(),
-          "email": emailController.text.trim(),
-          "eth_address": widget.ethAddress
-              .toLowerCase(),
-          "private_key": widget.privateKey,
-          "createdAt": FieldValue.serverTimestamp(),
-        },
-      );
+      // 1️⃣ Lưu thông tin tổ chức vào Firestore
+      await FirebaseFirestore.instance.collection("organizations").doc(uid).set({
+        "fullName": fullNameController.text.trim(),
+        "brandName": brandController.text.trim(),
+        "businessType": _selectedBusinessType,
+        "foundedYear": foundedYearController.text.trim(),
+        "address": addressController.text.trim(),
+        "phoneNumber": phoneController.text.trim(),
+        "email": emailController.text.trim(),
+        "eth_address": widget.ethAddress.toLowerCase(),
+        "private_key": widget.privateKey,
+        "createdAt": FieldValue.serverTimestamp(),
+      });
 
-      // 2️⃣ Retrieve user’s private key from Firestore
-      final userDoc = await FirebaseFirestore.instance
-          .collection("users")
-          .doc(uid)
-          .get();
+      // 2️⃣ Lấy private key user từ Firestore
+      final userDoc =
+          await FirebaseFirestore.instance.collection("users").doc(uid).get();
       final privateKey = userDoc["private_key"] as String?;
       if (privateKey == null || privateKey.isEmpty) {
         throw Exception("Private key not found for this user!");
       }
 
-      // 3️⃣ Init blockchain client
-      await initContract(); // Giả sử hàm này tồn tại từ file gốc của bạn
+      // 3️⃣ Ghi dữ liệu lên blockchain
+      await initContract(); // Hàm có sẵn trong walletExt_service.dart
       final credentials = EthPrivateKey.fromHex(privateKey);
       final walletAddress = await credentials.extractAddress();
 
-      // 4️⃣ Check organization membership
       final fnCheck = usersContract!.function("getOrganization");
       final result = await ethClient.call(
         contract: usersContract!,
         function: fnCheck,
         params: [walletAddress],
       );
+
       final orgData = result.first as List<dynamic>;
       final orgName = orgData[0] as String;
 
       if (orgName.isNotEmpty) {
-        print("🟡 Already has an organization on-chain, skipping creation.");
+        print("🟡 Organization already exists on-chain, skip.");
       } else {
-        // 5️⃣ Register organization on-chain
         final txHash = await addOrganizationOnChain(
           brandController.text.trim(),
           credentials,
         );
-        print("✅ Giao dịch đăng ký tổ chức ĐÃ GỬI: $txHash");
+        print("✅ On-chain organization registered: $txHash");
       }
 
-      // 🔥 BƯỚC 4: Cập nhật cờ 'isOrganizationDetailsSubmitted'
+      // 4️⃣ Cập nhật cờ và username trong Firestore
       final newUsername = fullNameController.text.trim();
       await FirebaseFirestore.instance.collection("users").doc(uid).update({
         "isOrganizationDetailsSubmitted": true,
-        "username": newUsername, // Cập nhật tên user bằng tên đầy đủ
+        "username": newUsername,
       });
+
+      // 5️⃣ Cập nhật state trong AuthService và lưu lại SecureStorage
+      await authService.value
+          .markOrganizationDetailsAsSubmitted(newUsername);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              "✅ Đăng ký tổ chức thành công! Vui lòng đăng nhập lại.",
-            ),
+            content: Text("✅ Tổ chức đã đăng ký thành công!"),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 2), // Cho user kịp đọc
+            duration: Duration(seconds: 2),
           ),
         );
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
 
-      await authService.value.signOut();
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const LoginOrRegisterPage()),
-              (route) => false,
+        // ✅ Điều hướng về trang chủ
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const AuthLayout()),
+          (route) => false,
         );
       }
     } catch (e) {
@@ -149,13 +142,12 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("❌ Failed to save organization: $e"),
+            content: Text("❌ Lưu tổ chức thất bại: $e"),
             backgroundColor: Colors.red,
           ),
         );
         setState(() => _isSaving = false);
       }
-    } finally {
     }
   }
 
@@ -181,14 +173,12 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
             children: [
               _buildField("Full Company Name", fullNameController),
               _buildField("Brand / Short Name", brandController),
-
-              // Thay thế _buildField bằng DropdownButtonFormField
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
                 child: DropdownButtonFormField<String>(
                   value: _selectedBusinessType,
                   style: const TextStyle(color: Colors.white),
-                  dropdownColor: const Color(0xFF243B55), // Màu nền của list
+                  dropdownColor: const Color(0xFF243B55),
                   decoration: InputDecoration(
                     labelText: "Business Type",
                     labelStyle: const TextStyle(color: Colors.white70),
@@ -206,15 +196,12 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
                     );
                   }).toList(),
                   onChanged: (newValue) {
-                    setState(() {
-                      _selectedBusinessType = newValue;
-                    });
+                    setState(() => _selectedBusinessType = newValue);
                   },
                   validator: (value) =>
-                  value == null ? "Please select a business type" : null,
+                      value == null ? "Please select a business type" : null,
                 ),
               ),
-
               _buildField(
                 "Founded Year",
                 foundedYearController,
@@ -244,17 +231,17 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
                 ),
                 child: _isSaving
                     ? const CircularProgressIndicator(
-                  color: Colors.black,
-                  strokeWidth: 2,
-                )
+                        color: Colors.black,
+                        strokeWidth: 2,
+                      )
                     : const Text(
-                  "SAVE ORGANIZATION",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
-                ),
+                        "SAVE ORGANIZATION",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
               ),
             ],
           ),
@@ -264,10 +251,10 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
   }
 
   Widget _buildField(
-      String label,
-      TextEditingController controller, {
-        TextInputType keyboardType = TextInputType.text,
-      }) {
+    String label,
+    TextEditingController controller, {
+    TextInputType keyboardType = TextInputType.text,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
@@ -285,7 +272,7 @@ class _OrganizationFormPageState extends State<OrganizationFormPage> {
           ),
         ),
         validator: (value) =>
-        value == null || value.isEmpty ? "Enter $label" : null,
+            value == null || value.isEmpty ? "Enter $label" : null,
       ),
     );
   }

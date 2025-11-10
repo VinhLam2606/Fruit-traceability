@@ -53,7 +53,7 @@ class AuthLayout extends StatelessWidget {
         }
 
         // Tạo Web3 client
-        final rpcUrl = "http://10.0.2.2:7545"; // 🔧 Ganache mặc định
+        final rpcUrl = "http://192.168.102.5:7545"; // 🔧 Ganache mặc định
         final web3client = Web3Client(rpcUrl, http.Client());
         final credentials = EthPrivateKey.fromHex(service.decryptedPrivateKey!);
 
